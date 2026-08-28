@@ -7,17 +7,21 @@ import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.Metadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionResult
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
+import java.util.concurrent.Executors
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
@@ -33,6 +37,11 @@ class PlaybackService : MediaSessionService() {
     private var retries = 0
     private var retryPending: Runnable? = null
     private var sleepPending: Runnable? = null
+
+    /** Cancion que suena ahora, si la emisora la publica. */
+    private var song: String? = null
+    private val io = Executors.newSingleThreadExecutor()
+    private var tritonPending: Runnable? = null
 
     /** Mide los datos gastados mientras suena. */
     private val meterTick = object : Runnable {
@@ -87,6 +96,8 @@ class PlaybackService : MediaSessionService() {
     override fun onDestroy() {
         cancelRetry()
         cancelSleep()
+        cancelTriton()
+        io.shutdownNow()
         handler.removeCallbacks(meterTick)
         session?.run {
             player.removeListener(playerListener)
@@ -159,14 +170,38 @@ class PlaybackService : MediaSessionService() {
             if (playbackState == Player.STATE_READY) retries = 0
         }
 
+        /** La Mega manda el titulo dentro del propio stream, en los bloques ICY. */
+        override fun onMetadata(metadata: Metadata) {
+            for (i in 0 until metadata.length()) {
+                val entrada = metadata.get(i)
+                if (entrada is IcyInfo) {
+                    // un bloque vacio significa "sigue la misma cancion",
+                    // asi que solo se hace caso cuando trae texto de verdad
+                    NowPlaying.deIcy(entrada.title)?.let { setSong(it) }
+                    return
+                }
+            }
+        }
+
+        override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+            song = null
+            if (Stations.parseStation(mediaItem?.mediaId)?.tritonMount != null) {
+                startTriton()
+            } else {
+                cancelTriton()
+            }
+        }
+
         override fun onIsPlayingChanged(isPlaying: Boolean) {
             if (isPlaying) {
                 DataMeter.start(this@PlaybackService)
                 handler.removeCallbacks(meterTick)
                 handler.postDelayed(meterTick, 5_000)
+                startTriton()
             } else {
                 DataMeter.sample(this@PlaybackService)
                 handler.removeCallbacks(meterTick)
+                cancelTriton()
             }
         }
     }
@@ -175,6 +210,65 @@ class PlaybackService : MediaSessionService() {
         retryPending?.let { handler.removeCallbacks(it) }
         retryPending = null
         retries = 0
+    }
+
+    // ------------------------------------------------------ que suena ahora
+
+    private fun currentStation(): Station? =
+        Stations.parseStation(session?.player?.currentMediaItem?.mediaId)
+
+    private fun setSong(nuevo: String?) {
+        if (nuevo == song) return
+        song = nuevo
+
+        val p = session?.player ?: return
+        val item = p.currentMediaItem ?: return
+        val station = Stations.parseStation(item.mediaId) ?: return
+        try {
+            // Solo cambian los metadatos: media3 1.4 detecta que la URL es la
+            // misma y los aplica sin volver a preparar el stream, asi que el
+            // audio no se corta al cambiar de cancion.
+            p.replaceMediaItem(
+                p.currentMediaItemIndex,
+                item.buildUpon().setMediaMetadata(Stations.metadata(station, nuevo)).build()
+            )
+        } catch (e: Exception) {
+            // en el peor caso la notificacion se queda con el titulo anterior;
+            // la radio sigue sonando igual
+        }
+    }
+
+    /** Olimpica deja los bloques ICY vacios: hay que preguntarle a Triton. */
+    private fun startTriton() {
+        cancelTriton()
+        val mount = currentStation()?.tritonMount ?: return
+        consultarTriton(mount)
+    }
+
+    private fun consultarTriton(mount: String) {
+        try {
+            io.execute {
+                val info = NowPlaying.consultarTriton(mount)
+                handler.post {
+                    val p = session?.player
+                    if (p == null || !p.isPlaying) return@post
+                    if (currentStation()?.tritonMount != mount) return@post
+
+                    setSong(info.texto)
+
+                    val r = Runnable { consultarTriton(mount) }
+                    tritonPending = r
+                    handler.postDelayed(r, info.siguienteConsultaMs)
+                }
+            }
+        } catch (e: Exception) {
+            // el executor ya esta cerrado (servicio muriendo): nada que hacer
+        }
+    }
+
+    private fun cancelTriton() {
+        tritonPending?.let { handler.removeCallbacks(it) }
+        tritonPending = null
     }
 
     // ------------------------------------------------------------ temporizador

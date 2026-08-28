@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.format.DateFormat
 import android.text.format.Formatter
 import android.view.View
 import android.widget.AdapterView
@@ -23,6 +24,7 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.radioco.app.databinding.ActivityMainBinding
 import com.radioco.app.databinding.ItemStationBinding
+import java.util.Date
 import java.util.concurrent.Executors
 
 @UnstableApi
@@ -46,8 +48,12 @@ class MainActivity : AppCompatActivity() {
     private var downloadId = -1L
     private var updMsg = ""
 
+    /** Respeta el formato de 12/24 h que tenga configurado el movil. */
+    private val horaFmt by lazy { DateFormat.getTimeFormat(this) }
+
     private val tick = object : Runnable {
         override fun run() {
+            paintClock()
             paintData()
             paintTimer()
             pollDownload()
@@ -85,6 +91,7 @@ class MainActivity : AppCompatActivity() {
         paintUpdate()
 
         askNotificationPermission()
+        paintClock()
         paintData()
         maybeAutoCheck()
     }
@@ -355,8 +362,15 @@ class MainActivity : AppCompatActivity() {
             row.tvStatus.text = when {
                 !on -> ""
                 c!!.isPlaying -> {
-                    val v = Stations.parseVariant(c.currentMediaItem?.mediaId)
-                    "En directo · " + Stations.streamOf(st, v).label
+                    // el servicio pone la cancion como titulo cuando la emisora
+                    // la publica; si no, el titulo sigue siendo el de la emisora
+                    val cancion = c.mediaMetadata.title?.toString()?.takeIf { it != st.name }
+                    if (cancion != null) {
+                        "♪ " + cancion
+                    } else {
+                        val v = Stations.parseVariant(c.currentMediaItem?.mediaId)
+                        "En directo · " + Stations.streamOf(st, v).label
+                    }
                 }
 
                 c.playbackState == Player.STATE_BUFFERING -> "Conectando…"
@@ -373,6 +387,10 @@ class MainActivity : AppCompatActivity() {
         }
         b.dotState.backgroundTintList =
             android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, dot))
+    }
+
+    private fun paintClock() {
+        b.tvClock.text = horaFmt.format(Date())
     }
 
     private fun paintData() {

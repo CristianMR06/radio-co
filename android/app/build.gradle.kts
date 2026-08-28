@@ -1,4 +1,4 @@
-import java.util.Properties
+﻿import java.util.Properties
 
 plugins {
     id("com.android.application")
@@ -24,8 +24,8 @@ android {
 
         // OJO: la etiqueta de la release en GitHub tiene que ser "v<versionCode>"
         // (v2, v3, ...). Es lo que la app compara para saber si hay novedad.
-        versionCode = 2
-        versionName = "1.1"
+        versionCode = 3
+        versionName = "1.2"
 
         buildConfigField("String", "GITHUB_REPO", "\"CristianMR06/radio-co\"")
     }

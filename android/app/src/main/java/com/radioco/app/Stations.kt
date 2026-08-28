@@ -17,7 +17,12 @@ data class Station(
     val name: String,
     val city: String,
     val accent: Int,
-    val streams: List<Stream>
+    val streams: List<Stream>,
+    /**
+     * Mount de la API de Triton, para las emisoras que no rellenan los
+     * metadatos ICY del stream (Olimpica). null = el titulo llega por ICY.
+     */
+    val tritonMount: String? = null
 ) {
     /** MB por hora del stream principal, para avisar al usuario antes de darle play. */
     val mbPerHour: Int get() = (streams[0].kbps * 3600.0 / 8 / 1024).toInt()
@@ -41,7 +46,8 @@ object Stations {
                     "https://playerservices.streamtheworld.com/api/livestream-redirect/OLP_IBAGUE.mp3",
                     96, "MP3 96k"
                 )
-            )
+            ),
+            tritonMount = "OLP_IBAGUEAAC"
         ),
         Station(
             id = "lamega-bogota",
@@ -75,15 +81,23 @@ object Stations {
     fun streamOf(station: Station, variant: Int): Stream =
         station.streams[((variant % station.streams.size) + station.streams.size) % station.streams.size]
 
-    fun mediaItem(station: Station, variant: Int): MediaItem {
-        val s = streamOf(station, variant)
-        val meta = MediaMetadata.Builder()
-            .setTitle(station.name)
-            .setArtist(station.city)
+    /**
+     * Lo que se ve en la notificacion y en la pantalla de bloqueo.
+     * Con cancion: titulo = cancion, subtitulo = emisora.
+     * Sin cancion: titulo = emisora, subtitulo = ciudad y dial.
+     */
+    fun metadata(station: Station, song: String? = null): MediaMetadata =
+        MediaMetadata.Builder()
+            .setTitle(song ?: station.name)
+            .setArtist(if (song != null) station.name else station.city)
             .setStation(station.name)
             .setIsBrowsable(false)
             .setIsPlayable(true)
             .build()
+
+    fun mediaItem(station: Station, variant: Int, song: String? = null): MediaItem {
+        val s = streamOf(station, variant)
+        val meta = metadata(station, song)
 
         val b = MediaItem.Builder()
             .setMediaId(mediaId(station, variant))
