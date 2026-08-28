@@ -26,6 +26,13 @@ object NowPlaying {
 
     data class Info(val texto: String?, val siguienteConsultaMs: Long)
 
+    /**
+     * El separador " · " queda bien en pantalla pero estorba al buscar.
+     * "Ryan Castro · La Villa" -> "Ryan Castro La Villa"
+     */
+    fun consultaBusqueda(cancion: String): String =
+        cancion.replace(" · ", " ").trim()
+
     private val CUE_TITLE = Regex("""cue_title"><!\[CDATA\[(.*?)]]>""", RegexOption.DOT_MATCHES_ALL)
     private val ARTIST = Regex("""track_artist_name"><!\[CDATA\[(.*?)]]>""", RegexOption.DOT_MATCHES_ALL)
     private val DURACION = Regex("""cue_time_duration"><!\[CDATA\[(\d+)]]>""")

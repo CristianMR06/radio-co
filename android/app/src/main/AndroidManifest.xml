@@ -10,6 +10,13 @@
     <!-- para instalar la actualizacion descargada desde las releases de GitHub -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
+    <!-- Android 11+ oculta las apps instaladas salvo que se declaren aqui.
+         Sin esto, abrir YouTube Music por su paquete falla aunque este puesta. -->
+    <queries>
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.google.android.youtube" />
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"

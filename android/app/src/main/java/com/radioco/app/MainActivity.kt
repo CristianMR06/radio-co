@@ -1,8 +1,11 @@
 package com.radioco.app
 
 import android.Manifest
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -345,6 +348,29 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Abre la cancion en YouTube Music. Si no esta instalada, tira del
+     * navegador, que tambien sirve.
+     */
+    private fun buscarCancion(cancion: String) {
+        val url = "https://music.youtube.com/search?q=" +
+            Uri.encode(NowPlaying.consultaBusqueda(cancion))
+        val web = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+
+        val app = Intent(web).setPackage("com.google.android.apps.youtube.music")
+        try {
+            startActivity(app)
+            return
+        } catch (e: ActivityNotFoundException) {
+            // no esta instalada: seguimos abajo
+        }
+        try {
+            startActivity(web)
+        } catch (e: ActivityNotFoundException) {
+            Toast.makeText(this, R.string.no_music_app, Toast.LENGTH_SHORT).show()
+        }
+    }
+
     // -------------------------------------------------------------------- pintado
 
     private fun render() {
@@ -359,18 +385,20 @@ class MainActivity : AppCompatActivity() {
             row.tvStatus.setTextColor(
                 if (on) st.accent else ContextCompat.getColor(this, R.color.dim)
             )
+            // el servicio pone la cancion como titulo cuando la emisora la
+            // publica; si no, el titulo sigue siendo el nombre de la emisora
+            val cancion =
+                if (on && c!!.isPlaying) c.mediaMetadata.title?.toString()?.takeIf { it != st.name }
+                else null
+
+            row.btnSong.visibility = if (cancion != null) View.VISIBLE else View.GONE
+            row.btnSong.setOnClickListener { cancion?.let { buscarCancion(it) } }
+
             row.tvStatus.text = when {
                 !on -> ""
-                c!!.isPlaying -> {
-                    // el servicio pone la cancion como titulo cuando la emisora
-                    // la publica; si no, el titulo sigue siendo el de la emisora
-                    val cancion = c.mediaMetadata.title?.toString()?.takeIf { it != st.name }
-                    if (cancion != null) {
-                        "♪ " + cancion
-                    } else {
-                        val v = Stations.parseVariant(c.currentMediaItem?.mediaId)
-                        "En directo · " + Stations.streamOf(st, v).label
-                    }
+                c!!.isPlaying -> cancion?.let { "♪ $it" } ?: run {
+                    val v = Stations.parseVariant(c.currentMediaItem?.mediaId)
+                    "En directo · " + Stations.streamOf(st, v).label
                 }
 
                 c.playbackState == Player.STATE_BUFFERING -> "Conectando…"

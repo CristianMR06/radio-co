@@ -21,6 +21,9 @@
     <string name="grant_install_hint">Android necesita tu permiso para que esta app instale actualizaciones</string>
     <string name="retry">Reintentar</string>
 
+    <string name="open_music">Buscar esta canción en YouTube Music</string>
+    <string name="no_music_app">No hay ninguna app para abrir la búsqueda</string>
+
     <string-array name="timer_labels">
         <item>No apagar</item>
         <item>En 15 minutos</item>
