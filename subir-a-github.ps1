@@ -16,6 +16,11 @@ $raiz    = $PSScriptRoot
 $android = Join-Path $raiz "android"
 $gradleFile = Join-Path $android "app\build.gradle.kts"
 
+# En esta maquina ni git ni gh estan en el PATH del sistema (solo los ve Git Bash)
+foreach ($p in @("C:\Program Files\Git\cmd", "C:\Program Files\GitHub CLI")) {
+    if ((Test-Path $p) -and ($env:PATH -notlike "*$p*")) { $env:PATH = "$p;$env:PATH" }
+}
+
 # --- 1. quien soy en GitHub --------------------------------------------------
 $login = (gh api user --jq .login 2>$null)
 if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($login)) {

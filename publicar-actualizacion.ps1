@@ -22,6 +22,11 @@ $raiz    = $PSScriptRoot
 $android = Join-Path $raiz "android"
 $gradleFile = Join-Path $android "app\build.gradle.kts"
 
+# En esta maquina ni git ni gh estan en el PATH del sistema (solo los ve Git Bash)
+foreach ($p in @("C:\Program Files\Git\cmd", "C:\Program Files\GitHub CLI")) {
+    if ((Test-Path $p) -and ($env:PATH -notlike "*$p*")) { $env:PATH = "$p;$env:PATH" }
+}
+
 # --- 1. subir el versionCode -------------------------------------------------
 $texto = Get-Content $gradleFile -Raw -Encoding UTF8
 if ($texto -notmatch 'versionCode\s*=\s*(\d+)') {
