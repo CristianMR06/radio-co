@@ -22,35 +22,40 @@ $raiz    = $PSScriptRoot
 $android = Join-Path $raiz "android"
 $gradleFile = Join-Path $android "app\build.gradle.kts"
 
-# En esta maquina ni git ni gh estan en el PATH del sistema (solo los ve Git Bash)
-foreach ($p in @("C:\Program Files\Git\cmd", "C:\Program Files\GitHub CLI")) {
-    if ((Test-Path $p) -and ($env:PATH -notlike "*$p*")) { $env:PATH = "$p;$env:PATH" }
-}
+. (Join-Path $raiz "lib-release.ps1")
+Add-HerramientasAlPath
 
 # --- 1. subir el versionCode -------------------------------------------------
-$texto = Get-Content $gradleFile -Raw -Encoding UTF8
-if ($texto -notmatch 'versionCode\s*=\s*(\d+)') {
+$original = Get-Content $gradleFile -Raw -Encoding UTF8
+if (-not ($original -match 'versionCode\s*=\s*(\d+)')) {
     throw "No encuentro versionCode en $gradleFile"
 }
 $codigoActual = [int]$Matches[1]
 $codigoNuevo  = $codigoActual + 1
 
-$texto = $texto -replace 'versionCode\s*=\s*\d+', "versionCode = $codigoNuevo"
-$texto = $texto -replace 'versionName\s*=\s*"[^"]*"', "versionName = `"$Version`""
+$texto = $original -replace 'versionCode\s*=\s*\d+', "versionCode = $codigoNuevo"
+$texto = $texto    -replace 'versionName\s*=\s*"[^"]*"', "versionName = `"$Version`""
 Set-Content -Path $gradleFile -Value $texto -Encoding UTF8 -NoNewline
 
 Write-Host "versionCode $codigoActual -> $codigoNuevo   versionName -> $Version" -ForegroundColor Cyan
 
 # --- 2. compilar -------------------------------------------------------------
-$env:JAVA_HOME   = "C:\Program Files\Android\Android Studio\jbr"
+$env:JAVA_HOME    = "C:\Program Files\Android\Android Studio\jbr"
 $env:ANDROID_HOME = "$env:LOCALAPPDATA\Android\Sdk"
 
-Push-Location $android
 try {
-    & .\gradlew.bat assembleRelease --console=plain
-    if ($LASTEXITCODE -ne 0) { throw "La compilacion fallo" }
-} finally {
-    Pop-Location
+    Push-Location $android
+    try {
+        & .\gradlew.bat assembleRelease --console=plain
+        if ($LASTEXITCODE -ne 0) { throw "La compilacion fallo" }
+    } finally {
+        Pop-Location
+    }
+} catch {
+    # dejar el proyecto como estaba: si no compila, no queremos la version subida
+    Set-Content -Path $gradleFile -Value $original -Encoding UTF8 -NoNewline
+    Write-Host "Compilacion fallida: he devuelto el versionCode a $codigoActual" -ForegroundColor Yellow
+    throw
 }
 
 $apkOrigen  = Join-Path $android "app\build\outputs\apk\release\app-release.apk"
@@ -65,19 +70,31 @@ if ($SoloCompilar) {
     exit 0
 }
 
-# --- 3. publicar la release --------------------------------------------------
+# --- 3. publicar -------------------------------------------------------------
 # La etiqueta TIENE que ser v<versionCode>: es lo que compara la app.
 $tag = "v$codigoNuevo"
 if ([string]::IsNullOrWhiteSpace($Notas)) { $Notas = "Version $Version" }
 
 Push-Location $raiz
 try {
-    git add -A
-    git commit -m "Version $Version (versionCode $codigoNuevo)"
-    git push
+    $previo = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"   # git escribe su progreso por stderr
+    try {
+        git add -A
+        git commit -m "Version $Version (versionCode $codigoNuevo)"
+        git push
+    } finally {
+        $ErrorActionPreference = $previo
+    }
 
-    gh release create $tag $apkDestino --title "Radio CO $Version" --notes $Notas
-    if ($LASTEXITCODE -ne 0) { throw "gh release create fallo" }
+    # comprobar que el commit esta de verdad en GitHub antes de etiquetar
+    $local  = (git rev-parse HEAD).Trim()
+    $remoto = (git rev-parse origin/main).Trim()
+    if ($local -ne $remoto) {
+        throw "El push no llego: local $($local.Substring(0,7)) vs origin/main $($remoto.Substring(0,7))"
+    }
+
+    Publish-Release -Tag $tag -Titulo "Radio CO $Version" -Notas $Notas -Apk $apkDestino
 } finally {
     Pop-Location
 }

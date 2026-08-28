@@ -16,10 +16,8 @@ $raiz    = $PSScriptRoot
 $android = Join-Path $raiz "android"
 $gradleFile = Join-Path $android "app\build.gradle.kts"
 
-# En esta maquina ni git ni gh estan en el PATH del sistema (solo los ve Git Bash)
-foreach ($p in @("C:\Program Files\Git\cmd", "C:\Program Files\GitHub CLI")) {
-    if ((Test-Path $p) -and ($env:PATH -notlike "*$p*")) { $env:PATH = "$p;$env:PATH" }
-}
+. (Join-Path $PSScriptRoot "lib-release.ps1")
+Add-HerramientasAlPath
 
 # --- 1. quien soy en GitHub --------------------------------------------------
 $login = (gh api user --jq .login 2>$null)
@@ -90,9 +88,8 @@ Copy-Item $apkOrigen $apkDestino -Force
 
 Push-Location $raiz
 try {
-    gh release create "v$codigo" $apkDestino --title "Radio CO $version" `
-        --notes "Primera version publicada. Boton de actualizacion dentro de la app."
-    if ($LASTEXITCODE -ne 0) { throw "gh release create fallo" }
+    Publish-Release -Tag "v$codigo" -Titulo "Radio CO $version" -Apk $apkDestino `
+        -Notas "Primera version publicada. Boton de actualizacion dentro de la app."
 } finally { Pop-Location }
 
 Write-Host ""
