@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">Radio CO</string>
+    <string name="data_today">Datos de hoy</string>
+    <string name="reset">reiniciar</string>
+    <string name="turn_off">Apagar</string>
+    <string name="footer">Sin anuncios, sin rastreadores, sin imágenes.\nSolo el audio de la emisora.</string>
+    <string name="play">Reproducir</string>
+    <string name="reset_done">Contador de datos reiniciado</string>
+
+    <string name="version_fmt">Versión %1$s</string>
+    <string name="check_updates">Buscar actualizaciones</string>
+    <string name="checking">Comprobando…</string>
+    <string name="up_to_date">Ya tienes la última versión</string>
+    <string name="update_download_fmt">Descargar e instalar (%1$s)</string>
+    <string name="update_found_fmt">Hay una versión nueva: %1$s</string>
+    <string name="downloading_fmt">Descargando… %1$d%%</string>
+    <string name="install_now">Instalar ahora</string>
+    <string name="downloaded_ready">Descarga lista, falta instalarla</string>
+    <string name="download_failed">No se pudo descargar. Inténtalo otra vez</string>
+    <string name="grant_install">Permitir instalar</string>
+    <string name="grant_install_hint">Android necesita tu permiso para que esta app instale actualizaciones</string>
+    <string name="retry">Reintentar</string>
+
+    <string-array name="timer_labels">
+        <item>No apagar</item>
+        <item>En 15 minutos</item>
+        <item>En 30 minutos</item>
+        <item>En 1 hora</item>
+        <item>En 2 horas</item>
+    </string-array>
+</resources>

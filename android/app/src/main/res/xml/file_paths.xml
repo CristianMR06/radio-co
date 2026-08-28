@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Android/data/com.radioco.app/files/Download -->
+    <external-files-path
+        name="apk_downloads"
+        path="Download/" />
+</paths>

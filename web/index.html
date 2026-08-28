@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Radio CO</title>
+<meta name="theme-color" content="#0b0f14">
+<meta name="description" content="Radio sin publicidad: Olímpica Stéreo Ibagué y La Mega Bogotá.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+:root{
+  --bg:#0b0f14; --card:#151b23; --card2:#1b232d; --line:#242f3b;
+  --txt:#e8eef5; --dim:#8b9aab; --ok:#34d399; --warn:#fbbf24; --err:#f87171;
+}
+html,body{margin:0;min-height:100%}
+body{
+  background:var(--bg); color:var(--txt);
+  font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,system-ui,sans-serif;
+  display:flex; flex-direction:column; align-items:center;
+  padding:env(safe-area-inset-top) 16px calc(16px + env(safe-area-inset-bottom));
+}
+.wrap{width:100%;max-width:520px;display:flex;flex-direction:column;gap:14px;padding-top:18px}
+header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+h1{font-size:19px;margin:0;letter-spacing:-.2px;display:flex;align-items:center;gap:9px}
+h1 .dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex:none;transition:background .2s}
+body[data-state="playing"] h1 .dot{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+body[data-state="loading"] h1 .dot{background:var(--warn);animation:pulse 1s infinite}
+body[data-state="error"] h1 .dot{background:var(--err)}
+@keyframes pulse{50%{opacity:.25}}
+.data{font-size:12px;color:var(--dim);text-align:right;line-height:1.35}
+.data b{color:var(--txt);font-weight:600;font-variant-numeric:tabular-nums}
+
+#list{display:flex;flex-direction:column;gap:10px}
+.card{
+  background:var(--card); border:1px solid var(--line); border-radius:16px;
+  padding:14px; display:flex; align-items:center; gap:14px; cursor:pointer;
+  transition:border-color .15s,background .15s;
+}
+.card:hover{background:var(--card2)}
+.card.on{border-color:var(--accent)}
+.btn{
+  flex:none;width:52px;height:52px;border-radius:50%;border:0;cursor:pointer;
+  background:var(--accent); color:#08111a; display:grid;place-items:center;
+}
+.btn svg{width:22px;height:22px;fill:currentColor}
+.meta{flex:1;min-width:0}
+.meta .n{font-weight:650;font-size:16px;letter-spacing:-.2px}
+.meta .c{color:var(--dim);font-size:12.5px;margin-top:1px}
+.meta .s{font-size:12px;margin-top:5px;color:var(--dim);min-height:16px}
+.card.on .meta .s{color:var(--accent)}
+.tag{flex:none;font-size:11px;color:var(--dim);text-align:right;line-height:1.35;font-variant-numeric:tabular-nums}
+
+.panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
+.row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dim)}
+.row label{flex:none;width:64px}
+input[type=range]{flex:1;accent-color:#38bdf8;height:22px}
+select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;flex:1}
+.reset{background:none;border:0;color:var(--dim);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;display:block;margin-left:auto}
+footer{color:var(--dim);font-size:11.5px;text-align:center;padding:4px 0 8px;line-height:1.55}
+</style>
+</head>
+<body data-state="idle">
+<div class="wrap">
+
+  <header>
+    <h1><span class="dot"></span>Radio CO</h1>
+    <div class="data">
+      Datos de hoy<br><b id="mb">0,0</b> MB
+      <button class="reset" id="reset" type="button">reiniciar</button>
+    </div>
+  </header>
+
+  <div id="list"></div>
+
+  <div class="panel">
+    <div class="row">
+      <label for="vol">Volumen</label>
+      <input type="range" id="vol" min="0" max="100" value="100">
+      <span id="volv" style="width:34px;text-align:right;color:var(--txt)">100</span>
+    </div>
+    <div class="row">
+      <label for="timer">Apagar</label>
+      <select id="timer">
+        <option value="0">No apagar</option>
+        <option value="15">En 15 minutos</option>
+        <option value="30">En 30 minutos</option>
+        <option value="60">En 1 hora</option>
+        <option value="120">En 2 horas</option>
+      </select>
+      <span id="tleft" style="min-width:52px;text-align:right;color:var(--txt);font-variant-numeric:tabular-nums"></span>
+    </div>
+  </div>
+
+  <footer>
+    Sin anuncios, sin rastreadores, sin imagenes que gasten datos.<br>
+    Solo el audio de la emisora.
+  </footer>
+</div>
+
+<script>
+"use strict";
+
+var STATIONS = [
+  {
+    id: "olimpica-ibague", name: "Olímpica Stéreo", city: "Ibagué · 94.3 FM", accent: "#fb7185",
+    streams: [
+      { url: "https://playerservices.streamtheworld.com/api/livestream-redirect/OLP_IBAGUEAAC.aac", kbps: 64, label: "AAC 64k" },
+      { url: "https://playerservices.streamtheworld.com/api/livestream-redirect/OLP_IBAGUE.mp3", kbps: 96, label: "MP3 96k" }
+    ]
+  },
+  {
+    id: "lamega-bogota", name: "La Mega", city: "Bogotá · 90.9 FM", accent: "#38bdf8",
+    streams: [
+      { url: "https://mdstrm.com/audio/632c9ae6660fef03fe3855fe/icecast.audio", kbps: 128, label: "AAC 128k" }
+    ]
+  }
+];
+
+var ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
+var ICON_STOP = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+
+function $(s) { return document.querySelector(s); }
+var list = $("#list");
+
+var audio = new Audio();
+audio.preload = "none";
+
+var current = null;   // emisora sonando
+var variant = 0;      // indice del stream dentro de la emisora
+var retries = 0;
+var retryTimer = null;
+var stallTimer = null;
+var sleepAt = 0;
+var lastStation = STATIONS[0];
+
+/* ---------- contador de datos (por dia, en localStorage) ---------- */
+function today() { return new Date().toISOString().slice(0, 10); }
+function loadUsage() {
+  try {
+    var d = JSON.parse(localStorage.getItem("radioco.data") || "{}");
+    if (d.day !== today()) return { day: today(), bytes: 0 };
+    return { day: d.day, bytes: d.bytes || 0 };
+  } catch (e) { return { day: today(), bytes: 0 }; }
+}
+var usage = loadUsage();
+function saveUsage() { try { localStorage.setItem("radioco.data", JSON.stringify(usage)); } catch (e) {} }
+function paintUsage() {
+  if (usage.day !== today()) usage = { day: today(), bytes: 0 };
+  $("#mb").textContent = (usage.bytes / 1048576).toFixed(1).replace(".", ",");
+}
+paintUsage();
+$("#reset").onclick = function (e) {
+  e.stopPropagation();
+  usage = { day: today(), bytes: 0 };
+  saveUsage(); paintUsage();
+};
+
+/* ---------- tarjetas ---------- */
+STATIONS.forEach(function (st) {
+  var el = document.createElement("div");
+  el.className = "card";
+  el.style.setProperty("--accent", st.accent);
+  el.dataset.id = st.id;
+  var mbh = (st.streams[0].kbps * 3600 / 8 / 1024).toFixed(0);
+  el.innerHTML =
+    '<button class="btn" type="button" aria-label="Reproducir ' + st.name + '">' + ICON_PLAY + "</button>" +
+    '<div class="meta"><div class="n">' + st.name + "</div>" +
+    '<div class="c">' + st.city + "</div>" +
+    '<div class="s"></div></div>' +
+    '<div class="tag">' + st.streams[0].label + "<br>~" + mbh + " MB/h</div>";
+  el.onclick = function () { toggle(st); };
+  list.appendChild(el);
+});
+
+function cardOf(st) { return list.querySelector('[data-id="' + st.id + '"]'); }
+function status(st, text) { var c = cardOf(st); if (c) c.querySelector(".s").textContent = text || ""; }
+function setState(s) { document.body.dataset.state = s; }
+function streamOf(st) { return st.streams[variant % st.streams.length]; }
+
+function paintCards() {
+  STATIONS.forEach(function (st) {
+    var c = cardOf(st), on = !!(current && current.id === st.id);
+    c.classList.toggle("on", on);
+    c.querySelector(".btn").innerHTML = on ? ICON_STOP : ICON_PLAY;
+    if (!on) status(st, "");
+  });
+}
+
+/* ---------- reproduccion ---------- */
+function clearTimers() {
+  clearTimeout(retryTimer); clearTimeout(stallTimer);
+  retryTimer = null; stallTimer = null;
+}
+
+function stop() {
+  clearTimers();
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+  if (current) lastStation = current;
+  current = null; variant = 0; retries = 0;
+  setState("idle");
+  paintCards();
+  document.title = "Radio CO";
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "none";
+}
+
+function play(st, keepRetries) {
+  clearTimers();
+  current = st;
+  if (!keepRetries) { retries = 0; variant = 0; }
+  var s = streamOf(st);
+  setState("loading");
+  paintCards();
+  status(st, retries ? "Reconectando… (" + retries + ")" : "Conectando…");
+  // el parametro evita reutilizar una conexion muerta guardada en cache
+  var sep = s.url.indexOf("?") === -1 ? "?" : "&";
+  audio.src = s.url + sep + "_=" + Date.now();
+  audio.load();
+  var p = audio.play();
+  if (p && p.catch) {
+    p.catch(function () {
+      status(st, "Toca el botón para reproducir");
+      setState("error");
+    });
+  }
+  armStall();
+  mediaMeta(st);
+}
+
+function toggle(st) {
+  if (current && current.id === st.id) stop(); else play(st);
+}
+
+function armStall() {
+  clearTimeout(stallTimer);
+  stallTimer = setTimeout(function () {
+    if (current && !audio.paused && audio.readyState < 3) reconnect("sin datos");
+  }, 12000);
+}
+
+function reconnect(why) {
+  if (!current) return;
+  var st = current;
+  retries++;
+  variant++;   // prueba el siguiente stream de la misma emisora
+  var wait = Math.min(15000, 1000 * Math.pow(2, Math.min(retries, 4)));
+  setState("error");
+  status(st, "Sin señal (" + why + "). Reintento en " + Math.round(wait / 1000) + " s");
+  clearTimers();
+  retryTimer = setTimeout(function () {
+    if (current && current.id === st.id) play(st, true);
+  }, wait);
+}
+
+audio.addEventListener("playing", function () {
+  if (!current) return;
+  retries = 0;
+  clearTimeout(stallTimer);
+  setState("playing");
+  status(current, "En directo · " + streamOf(current).label);
+  document.title = current.name + " · en directo";
+  if ("mediaSession" in navigator) navigator.mediaSession.playbackState = "playing";
+});
+audio.addEventListener("waiting", function () {
+  if (!current) return;
+  setState("loading"); status(current, "Cargando…"); armStall();
+});
+audio.addEventListener("stalled", function () { armStall(); });
+audio.addEventListener("error", function () { if (current) reconnect("error de red"); });
+audio.addEventListener("ended", function () { if (current) reconnect("conexión cerrada"); });
+
+/* ---------- tick: contador de datos + temporizador ---------- */
+setInterval(function () {
+  if (current && !audio.paused && document.body.dataset.state === "playing") {
+    usage.bytes += streamOf(current).kbps * 1000 / 8;
+    paintUsage(); saveUsage();
+  }
+  if (sleepAt) {
+    var left = Math.max(0, sleepAt - Date.now());
+    var m = Math.floor(left / 60000), sec = Math.floor(left % 60000 / 1000);
+    $("#tleft").textContent = m + ":" + String(sec).padStart(2, "0");
+    if (left <= 0) { sleepAt = 0; $("#timer").value = "0"; $("#tleft").textContent = ""; stop(); }
+  }
+}, 1000);
+
+/* ---------- volumen ---------- */
+var vol = $("#vol");
+vol.value = localStorage.getItem("radioco.vol") || "100";
+function applyVol() {
+  audio.volume = vol.value / 100;
+  $("#volv").textContent = vol.value;
+  try { localStorage.setItem("radioco.vol", vol.value); } catch (e) {}
+}
+vol.oninput = applyVol;
+applyVol();
+
+/* ---------- temporizador ---------- */
+$("#timer").onchange = function (e) {
+  var min = +e.target.value;
+  sleepAt = min ? Date.now() + min * 60000 : 0;
+  if (!min) $("#tleft").textContent = "";
+};
+
+/* ---------- controles del sistema / pantalla de bloqueo ---------- */
+function mediaMeta(st) {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: st.name, artist: st.city, album: "Radio CO",
+      artwork: [{ src: "icon-512.png", sizes: "512x512", type: "image/png" }]
+    });
+  } catch (e) {}
+  navigator.mediaSession.setActionHandler("play", function () { play(st); });
+  navigator.mediaSession.setActionHandler("pause", function () { stop(); });
+  navigator.mediaSession.setActionHandler("stop", function () { stop(); });
+}
+
+/* espacio = play/stop de la ultima emisora */
+document.addEventListener("keydown", function (e) {
+  if (e.code === "Space" && e.target === document.body) {
+    e.preventDefault();
+    if (current) stop(); else play(lastStation);
+  }
+});
+
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(function () {});
+}
+</script>
+</body>
+</html>

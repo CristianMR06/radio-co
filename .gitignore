@@ -1,0 +1,18 @@
+# --- nunca subir: firma de la app ---
+android/keystore.properties
+*.jks
+*.keystore
+
+# --- build de Android ---
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/build.log
+android/build-exitcode.txt
+
+# --- IDE / varios ---
+.idea/
+*.iml
+.DS_Store
+__pycache__/
