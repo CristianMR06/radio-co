@@ -94,6 +94,17 @@ Qué hace:
 Permisos: solo INTERNET, red, wakelock, servicio en primer plano y notificaciones.
 Ninguna librería de anuncios ni de analítica.
 
+### Publicar el repositorio (una sola vez)
+
+```powershell
+gh auth login
+C:\Users\PORCEN038\RadioCo\subir-a-github.ps1
+```
+
+Crea el repositorio público, sube el código y publica la primera release con el
+APK. Si tu usuario de GitHub no es `CristianMR06`, el script lo detecta, corrige
+`GITHUB_REPO` en `app/build.gradle.kts` y recompila solo.
+
 ### Actualizaciones desde la propia app
 
 La app trae un botón **Buscar actualizaciones**. Mira las *releases* de este
