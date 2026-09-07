@@ -43,8 +43,17 @@ python -m http.server 5510 --directory C:/Users/PORCEN038/RadioCo/web
 
 Luego `http://localhost:5510`.
 
-Para usarla desde el móvil basta subir la carpeta `web/` a cualquier hosting
-estático con HTTPS (Cloudways, Netlify, GitHub Pages, un FTP...). Con HTTPS,
+### Publicada en
+
+```
+https://cristianmr06.github.io/radio-co/
+```
+
+GitHub Pages sirve el repositorio desde la raíz, y la radio vive en `web/`, así
+que hay un `index.html` en la raíz que redirige. La dirección larga
+(`/radio-co/web/`) también funciona.
+
+Se actualiza sola con cada `git push`: no hay que hacer nada más. Con HTTPS,
 Chrome en Android ofrece **Añadir a pantalla de inicio** y queda como una app
 (pantalla completa, icono propio, controles en la pantalla de bloqueo).
 
