@@ -24,6 +24,21 @@
     <string name="open_music">Buscar esta canción en YouTube Music</string>
     <string name="no_music_app">No hay ninguna app para abrir la búsqueda</string>
 
+    <string name="lyrics">Letra</string>
+    <string name="open_lyrics">Ver la letra de esta canción</string>
+    <string name="lyrics_loading">Buscando la letra…</string>
+    <string name="lyrics_not_found">No he encontrado la letra de esta canción.</string>
+    <string name="lyrics_error">No he podido buscar la letra: %1$s</string>
+    <string name="lyrics_not_synced">Esta letra no viene sincronizada, así que no se resalta sola.</string>
+    <string name="lyrics_no_song">Esta emisora no está diciendo qué suena ahora mismo.</string>
+    <string name="lyrics_no_playback">Pon una emisora para ver la letra.</string>
+    <string name="lyrics_nothing">Nada sonando</string>
+    <string name="sync_label">Ajuste</string>
+    <string name="sync_minus">−1 s</string>
+    <string name="sync_plus">+1 s</string>
+    <string name="sync_hint_auto">Esta emisora se sincroniza sola. Ajústalo solo si hace falta.</string>
+    <string name="sync_hint_manual">Si la letra va adelantada, resta segundos. Si va atrasada, suma.</string>
+
     <string-array name="timer_labels">
         <item>No apagar</item>
         <item>En 15 minutos</item>

@@ -54,13 +54,13 @@ body[data-state="error"] h1 .dot{background:var(--err)}
 .meta .s{font-size:12px;margin-top:5px;color:var(--dim);min-height:16px;overflow-wrap:anywhere}
 .card.on .meta .s{color:var(--accent)}
 .tag{flex:none;font-size:11px;color:var(--dim);text-align:right;line-height:1.35;font-variant-numeric:tabular-nums}
-.yt{
+.icobtn{
   flex:none;display:none;width:36px;height:36px;border:0;border-radius:50%;
   background:none;color:var(--accent);cursor:pointer;padding:7px;
 }
-.yt:hover{background:var(--card2)}
-.yt svg{width:100%;height:100%;fill:currentColor;display:block}
-.card.on .yt.visible{display:block}
+.icobtn:hover{background:var(--card2)}
+.icobtn svg{width:100%;height:100%;fill:currentColor;display:block}
+.card.on .icobtn.visible{display:block}
 
 .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
 .row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dim)}
@@ -68,6 +68,38 @@ body[data-state="error"] h1 .dot{background:var(--err)}
 input[type=range]{flex:1;accent-color:#38bdf8;height:22px}
 select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;flex:1}
 .reset{background:none;border:0;color:var(--dim);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;display:block;margin-left:auto}
+
+/* ---- letra / karaoke ---- */
+#lyr{gap:10px}
+.lyrhead{display:flex;align-items:flex-start;gap:10px}
+.lyrtit{font-weight:650;font-size:15px;letter-spacing:-.2px}
+.lyrsub{color:var(--dim);font-size:12px;margin-top:1px}
+.lyrx{
+  margin-left:auto;flex:none;background:none;border:0;color:var(--dim);
+  font-size:16px;cursor:pointer;line-height:1;padding:2px 4px;
+}
+.lyrbody{
+  max-height:46vh;overflow-y:auto;scroll-behavior:smooth;
+  border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+  padding:10px 0;
+}
+.lyrbody .ln{
+  padding:5px 2px;font-size:15px;line-height:1.35;color:var(--dim);
+  transition:color .2s,transform .2s;transform-origin:left center;
+}
+.lyrbody .ln.now{color:var(--txt);font-weight:650;transform:scale(1.04)}
+.lyrbody .ln.done{opacity:.45}
+.lyrbody.plana .ln{color:var(--txt);opacity:1;font-size:14px}
+.lyrmsg{color:var(--dim);font-size:13px;padding:6px 2px}
+.lyrsync{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dim);flex-wrap:wrap}
+.lyrsync button{
+  background:var(--card2);color:var(--txt);border:1px solid var(--line);
+  border-radius:8px;padding:5px 9px;font-size:12px;cursor:pointer;
+  font-variant-numeric:tabular-nums;
+}
+.lyrsync button:hover{border-color:var(--dim)}
+.lyrsync .off{color:var(--txt);font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
+.lyrsync .hint{flex:1 1 100%;font-size:11px;line-height:1.4}
 footer{color:var(--dim);font-size:11.5px;text-align:center;padding:4px 0 8px;line-height:1.55}
 </style>
 </head>
@@ -89,6 +121,23 @@ footer{color:var(--dim);font-size:11.5px;text-align:center;padding:4px 0 8px;lin
   </header>
 
   <div id="list"></div>
+
+  <div class="panel" id="lyr" hidden>
+    <div class="lyrhead">
+      <div>
+        <div class="lyrtit" id="lyrTit"></div>
+        <div class="lyrsub" id="lyrSub"></div>
+      </div>
+      <button class="lyrx" id="lyrClose" type="button" aria-label="Cerrar la letra">✕</button>
+    </div>
+    <div class="lyrbody" id="lyrBody"></div>
+    <div class="lyrsync" id="lyrSync" hidden>
+      <button type="button" id="lyrMenos">−1 s</button>
+      <span class="off" id="lyrOff">0 s</span>
+      <button type="button" id="lyrMas">+1 s</button>
+      <span class="hint">Si la letra va adelantada, resta segundos. Si va atrasada, suma.</span>
+    </div>
+  </div>
 
   <div class="panel">
     <div class="row">
@@ -140,6 +189,11 @@ var STATIONS = [
 
 var ICON_PLAY = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>';
 var ICON_STOP = '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+/* lineas de texto: la letra de la cancion */
+var ICON_LYRICS =
+  '<svg viewBox="0 0 24 24">' +
+  '<path d="M4,6h16v2H4V6z M4,10h11v2H4V10z M4,14h16v2H4V14z M4,18h11v2H4V18z"/>' +
+  '</svg>';
 /* nota musical + flecha de "abrir fuera" */
 var ICON_MUSIC =
   '<svg viewBox="0 0 24 24">' +
@@ -162,6 +216,22 @@ var sleepAt = 0;
 var lastStation = STATIONS[0];
 var song = null;        // lo que suena ahora, si la emisora lo publica
 var songTimer = null;
+var songArtista = null; // partes sin juntar, para buscar la letra
+var songTitulo = null;
+var cueStart = 0;       // epoch ms en que la EMISORA empezo la cancion
+var cueDur = 0;         // duracion en ms, para elegir bien la version
+
+/* Retardo tipico entre lo que emite la emisora y lo que oyes: buffer del
+   reproductor mas el del CDN. No se puede medir desde aqui, asi que se parte
+   de una estimacion y el usuario la afina con los botones de +/- segundos. */
+var LATENCIA_BASE_MS = 20000;
+var offsetMs = 0;
+
+var letra = null;       // {lineas:[{t,txt}], sincronizada:bool, ref:"artista - titulo"}
+var letraClave = null;  // cancion para la que se pidio (evita repetir peticiones)
+var letraEstado = "";
+var letraAbierta = false;
+var lineaActual = -1;
 
 /* ---------- reloj ---------- */
 function paintClock() {
@@ -205,13 +275,21 @@ STATIONS.forEach(function (st) {
     '<div class="meta"><div class="n">' + st.name + "</div>" +
     '<div class="c">' + st.city + "</div>" +
     '<div class="s"></div></div>' +
-    '<button class="yt" type="button" title="Buscar esta canción en YouTube Music" ' +
+    '<button class="icobtn ltr" type="button" title="Ver la letra" ' +
+    'aria-label="Ver la letra de esta canción">' + ICON_LYRICS + "</button>" +
+    '<button class="icobtn ytm" type="button" title="Buscar esta canción en YouTube Music" ' +
     'aria-label="Buscar esta canción en YouTube Music">' + ICON_MUSIC + "</button>" +
     '<div class="tag">' + st.streams[0].label + "<br>~" + mbh + " MB/h</div>";
 
-  el.querySelector(".yt").onclick = function (e) {
-    e.stopPropagation();          // no parar la radio al pulsar el icono
+  // los iconos van dentro de la tarjeta, que es el boton de play/stop:
+  // hay que frenar la propagacion o se para la radio al pulsarlos
+  el.querySelector(".ytm").onclick = function (e) {
+    e.stopPropagation();
     if (song) abrirEnYouTubeMusic(song);
+  };
+  el.querySelector(".ltr").onclick = function (e) {
+    e.stopPropagation();
+    abrirLetra();
   };
   el.onclick = function () { toggle(st); };
   list.appendChild(el);
@@ -266,9 +344,18 @@ function pararCancion() {
   clearTimeout(songTimer);
   songTimer = null;
   song = null;
-  [].forEach.call(document.querySelectorAll(".yt"), function (b) {
+  songArtista = null;
+  songTitulo = null;
+  cueStart = 0;
+  cueDur = 0;
+  letra = null;
+  letraClave = null;
+  letraEstado = "";
+  lineaActual = -1;
+  [].forEach.call(document.querySelectorAll(".icobtn"), function (b) {
     b.classList.remove("visible");
   });
+  if (letraAbierta) pintarLetra();
 }
 
 /* Expresiones literales a proposito: construirlas desde un string obliga a
@@ -297,11 +384,22 @@ function buscarCancion(st) {
       if (!current || current.id !== st.id) return;
       var espera = 25000;
       if (xml) {
-        song = componer(extraer(xml, "artista"), extraer(xml, "titulo"));
+        var a = extraer(xml, "artista"), t = extraer(xml, "titulo");
+        song = componer(a, t);
+        songArtista = limpiar(a);
+        songTitulo = limpiar(t);
+
+        var dur = extraer(xml, "duracion"), ini = extraer(xml, "inicio");
+        cueStart = ini ? +ini : 0;
+        cueDur = dur ? +dur : 0;
+
         paintStatus(st);
         mediaMeta(st);
+
+        if (songArtista && songTitulo) pedirLetra(songArtista, songTitulo, cueDur);
+        else if (letraAbierta) { letra = null; letraClave = null; pintarLetra(); }
+
         // volver a preguntar justo cuando se acabe la cancion, no antes
-        var dur = extraer(xml, "duracion"), ini = extraer(xml, "inicio");
         if (dur && ini) {
           espera = Math.min(60000, Math.max(15000, (+ini + +dur) - Date.now() + 3000));
         }
@@ -324,9 +422,221 @@ function abrirEnYouTubeMusic(cancion) {
 function paintStatus(st) {
   if (!current || current.id !== st.id) return;
   status(st, song ? "♪ " + song : "En directo · " + streamOf(st).label);
-  var boton = cardOf(st).querySelector(".yt");
-  if (boton) boton.classList.toggle("visible", !!song);
+  [].forEach.call(cardOf(st).querySelectorAll(".icobtn"), function (b) {
+    b.classList.toggle("visible", !!song);
+  });
 }
+
+/* ---------- letra / karaoke ---------- */
+/* La letra viene de LRCLIB (lrclib.net): base comunitaria, gratis, sin clave y
+   con CORS abierto. Trae formato LRC, con marca de tiempo por linea. */
+
+/* Los titulos que mandan las emisoras traen ruido que rompe la busqueda:
+   el anyo pegado al final, corchetes, "(En Vivo)"... */
+function limpiarTitulo(t) {
+  return t
+    .replace(/\s*\((?:en\s+vivo|live|audio|video|official[^)]*)\)\s*/gi, " ")
+    .replace(/\s*\[[^\]]*\]\s*/g, " ")
+    .replace(/\s+(19|20)\d\d\s*$/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/* "Ryan Castro, Kapo, Gangsta" -> "Ryan Castro" */
+function primerArtista(a) {
+  return a.split(/\s*(?:,|&|\/|\bfeat\.?\b|\bft\.?\b|\bcon\b)\s*/i)[0].trim();
+}
+
+function parsearLrc(txt) {
+  var lineas = [];
+  txt.split("\n").forEach(function (l) {
+    var marcas = l.match(/\[\d+:\d+(?:[.:]\d+)?\]/g);
+    if (!marcas) return;                       // [ar:], [by:]... se ignoran
+    var texto = l.replace(/\[[^\]]*\]/g, "").trim();
+    marcas.forEach(function (m) {
+      var p = m.slice(1, -1).split(":");
+      lineas.push({
+        t: (+p[0]) * 60000 + Math.round(parseFloat(p[1].replace(",", ".")) * 1000),
+        txt: texto
+      });
+    });
+  });
+  lineas.sort(function (a, b) { return a.t - b.t; });
+  return lineas;
+}
+
+/* La duracion que da la emisora sirve para acertar con la version correcta
+   (single, remix, en directo...) entre los resultados. */
+function elegirVersion(lista, durMs) {
+  var conSync = lista.filter(function (x) { return x.syncedLyrics; });
+  var pool = conSync.length ? conSync : lista;
+  if (!pool.length) return null;
+  if (!durMs) return pool[0];
+  return pool.slice().sort(function (a, b) {
+    return Math.abs((a.duration || 0) * 1000 - durMs) -
+           Math.abs((b.duration || 0) * 1000 - durMs);
+  })[0];
+}
+
+function pedirLetra(artista, titulo, durMs) {
+  var clave = artista + "|" + titulo;
+  if (letraClave === clave) return;            // ya pedida para esta cancion
+  letraClave = clave;
+  letra = null;
+  lineaActual = -1;
+  letraEstado = "Buscando la letra…";
+  if (letraAbierta) pintarLetra();
+
+  var intentos = [
+    { artist_name: artista, track_name: titulo },
+    { artist_name: primerArtista(artista), track_name: limpiarTitulo(titulo) },
+    { q: primerArtista(artista) + " " + limpiarTitulo(titulo) }
+  ];
+
+  function intentar(i) {
+    if (letraClave !== clave) return;          // la cancion ya cambio
+    if (i >= intentos.length) {
+      letraEstado = "No he encontrado la letra de esta canción.";
+      if (letraAbierta) pintarLetra();
+      return;
+    }
+    var url = "https://lrclib.net/api/search?" +
+              new URLSearchParams(intentos[i]).toString();
+    fetch(url, { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (lista) {
+        if (letraClave !== clave) return;
+        var mejor = elegirVersion(lista || [], durMs);
+        if (!mejor) return intentar(i + 1);
+
+        var ref = (mejor.artistName || "") + " · " + (mejor.trackName || "");
+        if (mejor.syncedLyrics) {
+          letra = { lineas: parsearLrc(mejor.syncedLyrics), sincronizada: true, ref: ref };
+        } else if (mejor.plainLyrics) {
+          letra = {
+            lineas: mejor.plainLyrics.split("\n").map(function (t) {
+              return { t: null, txt: t };
+            }),
+            sincronizada: false,
+            ref: ref
+          };
+        } else {
+          return intentar(i + 1);
+        }
+        if (!letra.lineas.length) { letra = null; return intentar(i + 1); }
+        letraEstado = "";
+        lineaActual = -1;
+        if (letraAbierta) pintarLetra();
+      })
+      .catch(function () { intentar(i + 1); });
+  }
+  intentar(0);
+}
+
+function abrirLetra() {
+  letraAbierta = true;
+  $("#lyr").hidden = false;
+  pintarLetra();
+  if (songArtista && songTitulo) pedirLetra(songArtista, songTitulo, cueDur);
+  $("#lyr").scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function cerrarLetra() {
+  letraAbierta = false;
+  $("#lyr").hidden = true;
+}
+
+function pintarLetra() {
+  var body = $("#lyrBody");
+  $("#lyrTit").textContent = song || "Nada sonando";
+  $("#lyrSub").textContent = letra && letra.ref
+    ? letra.ref
+    : (current ? current.name + " · " + current.city : "");
+  $("#lyrSync").hidden = !(letra && letra.sincronizada);
+  body.classList.toggle("plana", !!(letra && !letra.sincronizada));
+
+  if (!letra) {
+    body.innerHTML = "";
+    var msg = document.createElement("div");
+    msg.className = "lyrmsg";
+    msg.textContent = letraEstado ||
+      (song ? "Buscando la letra…" : "Pon una emisora para ver la letra.");
+    body.appendChild(msg);
+    return;
+  }
+
+  body.innerHTML = "";
+  letra.lineas.forEach(function (l) {
+    var el = document.createElement("div");
+    el.className = "ln";
+    // textContent, no innerHTML: la letra es texto de fuera
+    el.textContent = l.txt || " ";
+    body.appendChild(el);
+  });
+
+  if (!letra.sincronizada) {
+    var nota = document.createElement("div");
+    nota.className = "lyrmsg";
+    nota.textContent = "Esta letra no viene sincronizada, así que no se resalta.";
+    body.appendChild(nota);
+  }
+  lineaActual = -1;
+}
+
+/* Por donde va la cancion, en ms. El dato de la emisora es de SU reloj: tu lo
+   oyes mas tarde por el buffer, y esa diferencia es lo que ajusta el usuario. */
+function posicionCancion() {
+  if (!cueStart || !current || audio.paused) return null;
+  return Date.now() - cueStart - (LATENCIA_BASE_MS + offsetMs);
+}
+
+function tickKaraoke() {
+  if (!letraAbierta || !letra || !letra.sincronizada) return;
+  var pos = posicionCancion();
+  if (pos === null) return;
+
+  var idx = -1;
+  for (var i = 0; i < letra.lineas.length; i++) {
+    if (letra.lineas[i].t <= pos) idx = i; else break;
+  }
+  if (idx === lineaActual) return;
+  lineaActual = idx;
+
+  var body = $("#lyrBody");
+  var nodos = body.querySelectorAll(".ln");
+  for (var j = 0; j < nodos.length; j++) {
+    nodos[j].classList.toggle("now", j === idx);
+    nodos[j].classList.toggle("done", j < idx);
+  }
+  if (idx >= 0 && nodos[idx]) {
+    body.scrollTop = Math.max(
+      0,
+      nodos[idx].offsetTop - body.clientHeight / 2 + nodos[idx].offsetHeight / 2
+    );
+  }
+}
+setInterval(tickKaraoke, 250);
+
+/* ---- ajuste de sincronismo ---- */
+offsetMs = +(localStorage.getItem("radioco.offset") || 0);
+
+function pintarOffset() {
+  var s = Math.round(offsetMs / 1000);
+  $("#lyrOff").textContent = (s > 0 ? "+" : "") + s + " s";
+}
+
+function ajustarOffset(d) {
+  offsetMs = Math.max(-60000, Math.min(60000, offsetMs + d));
+  try { localStorage.setItem("radioco.offset", offsetMs); } catch (e) {}
+  pintarOffset();
+  lineaActual = -1;
+  tickKaraoke();
+}
+
+$("#lyrMenos").onclick = function () { ajustarOffset(-1000); };
+$("#lyrMas").onclick = function () { ajustarOffset(1000); };
+$("#lyrClose").onclick = cerrarLetra;
+pintarOffset();
 
 /* ---------- reproduccion ---------- */
 function clearTimers() {

@@ -29,6 +29,15 @@ class PlaybackService : MediaSessionService() {
     companion object {
         const val CMD_SLEEP = "com.radioco.app.SLEEP"
         const val EXTRA_MINUTES = "minutes"
+
+        // Claves de los extras de la sesion: es como la pantalla de la letra
+        // se entera de por donde va la cancion.
+        const val EX_MODO = "sync_modo"            // "icy" | "triton"
+        const val EX_ANCLA_PLAYER = "sync_ancla"   // posicion del player donde empieza
+        const val EX_CUE_START = "sync_cue_start"  // epoch ms del inicio en la emisora
+        const val EX_ARTISTA = "song_artista"
+        const val EX_TITULO = "song_titulo"
+        const val EX_DURACION = "song_duracion"
     }
 
     private var session: MediaSession? = null
@@ -177,7 +186,17 @@ class PlaybackService : MediaSessionService() {
                 if (entrada is IcyInfo) {
                     // un bloque vacio significa "sigue la misma cancion",
                     // asi que solo se hace caso cuando trae texto de verdad
-                    NowPlaying.deIcy(entrada.title)?.let { setSong(it) }
+                    val texto = NowPlaying.deIcy(entrada.title) ?: return
+                    val (artista, titulo) = NowPlaying.deIcyPartes(entrada.title)
+                    val p = session?.player
+                    // el metadato se lee por delante de lo que suena: justo lo
+                    // que hay en el buffer. Ahi empieza a oirse esta cancion.
+                    val ancla = if (p != null) {
+                        p.currentPosition + p.totalBufferedDuration
+                    } else {
+                        0L
+                    }
+                    setSong(texto, artista, titulo, anclaPlayer = ancla)
                     return
                 }
             }
@@ -185,6 +204,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             song = null
+            limpiarSync()
             if (Stations.parseStation(mediaItem?.mediaId)?.tritonMount != null) {
                 startTriton()
             } else {
@@ -217,9 +237,18 @@ class PlaybackService : MediaSessionService() {
     private fun currentStation(): Station? =
         Stations.parseStation(session?.player?.currentMediaItem?.mediaId)
 
-    private fun setSong(nuevo: String?) {
+    private fun setSong(
+        nuevo: String?,
+        artista: String? = null,
+        titulo: String? = null,
+        cueStartWall: Long = 0L,
+        duracionMs: Long = 0L,
+        anclaPlayer: Long? = null
+    ) {
         if (nuevo == song) return
         song = nuevo
+
+        publicarSync(artista, titulo, cueStartWall, duracionMs, anclaPlayer)
 
         val p = session?.player ?: return
         val item = p.currentMediaItem ?: return
@@ -235,6 +264,56 @@ class PlaybackService : MediaSessionService() {
         } catch (e: Exception) {
             // en el peor caso la notificacion se queda con el titulo anterior;
             // la radio sigue sonando igual
+        }
+    }
+
+    /**
+     * Publica en la sesion por donde va la cancion, para que la pantalla de la
+     * letra pueda sincronizar. Hay dos casos y son muy distintos:
+     *
+     * - ICY (La Mega): el titulo viaja DENTRO del stream, asi que el momento en
+     *   que lo leemos corresponde al inicio de la cancion en el audio. Como
+     *   ExoPlayer va por delante de lo que suena, y sabe cuanto, el desfase se
+     *   calcula solo: ancla = posicion actual + lo que hay en el buffer.
+     * - Triton (Olimpica): el dato es del reloj de la EMISORA, y no hay forma
+     *   de saber cuanto tarda en llegar a tu oido. Se publica tal cual y la
+     *   pantalla resta una latencia estimada que el usuario puede afinar.
+     */
+    private fun publicarSync(
+        artista: String?,
+        titulo: String?,
+        cueStartWall: Long,
+        duracionMs: Long,
+        anclaPlayer: Long?
+    ) {
+        val s = session ?: return
+        val extras = Bundle().apply {
+            when {
+                anclaPlayer != null -> {
+                    putString(EX_MODO, "icy")
+                    putLong(EX_ANCLA_PLAYER, anclaPlayer)
+                }
+
+                cueStartWall > 0L -> {
+                    putString(EX_MODO, "triton")
+                    putLong(EX_CUE_START, cueStartWall)
+                }
+            }
+            artista?.let { putString(EX_ARTISTA, it) }
+            titulo?.let { putString(EX_TITULO, it) }
+            putLong(EX_DURACION, duracionMs)
+        }
+        try {
+            s.setSessionExtras(extras)
+        } catch (e: Exception) {
+            // sin extras la letra sigue viendose, solo pierde el sincronismo
+        }
+    }
+
+    private fun limpiarSync() {
+        try {
+            session?.setSessionExtras(Bundle.EMPTY)
+        } catch (e: Exception) {
         }
     }
 
@@ -254,7 +333,13 @@ class PlaybackService : MediaSessionService() {
                     if (p == null || !p.isPlaying) return@post
                     if (currentStation()?.tritonMount != mount) return@post
 
-                    setSong(info.texto)
+                    setSong(
+                        info.texto,
+                        info.artista,
+                        info.titulo,
+                        cueStartWall = info.cueStartWall,
+                        duracionMs = info.duracionMs
+                    )
 
                     val r = Runnable { consultarTriton(mount) }
                     tritonPending = r

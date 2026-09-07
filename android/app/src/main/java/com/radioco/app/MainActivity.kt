@@ -348,6 +348,10 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun abrirLetra() {
+        startActivity(Intent(this, LyricsActivity::class.java))
+    }
+
     /**
      * Abre la cancion en YouTube Music. Si no esta instalada, tira del
      * navegador, que tambien sirve.
@@ -391,8 +395,14 @@ class MainActivity : AppCompatActivity() {
                 if (on && c!!.isPlaying) c.mediaMetadata.title?.toString()?.takeIf { it != st.name }
                 else null
 
-            row.btnSong.visibility = if (cancion != null) View.VISIBLE else View.GONE
+            val hayCancion = cancion != null
+            row.btnSong.visibility = if (hayCancion) View.VISIBLE else View.GONE
+            row.btnLyrics.visibility = if (hayCancion) View.VISIBLE else View.GONE
+            // el bitrate cabe cuando no hay iconos; con cancion, mandan los iconos
+            row.tvTag.visibility = if (hayCancion) View.GONE else View.VISIBLE
+
             row.btnSong.setOnClickListener { cancion?.let { buscarCancion(it) } }
+            row.btnLyrics.setOnClickListener { abrirLetra() }
 
             row.tvStatus.text = when {
                 !on -> ""

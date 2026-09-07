@@ -94,6 +94,37 @@ Qué hace:
 Permisos: solo INTERNET, red, wakelock, servicio en primer plano y notificaciones.
 Ninguna librería de anuncios ni de analítica.
 
+### Letra y modo karaoke
+
+Cuando se sabe qué suena, aparece un icono de letra en la fila de la emisora.
+Las letras vienen de **LRCLIB** (`lrclib.net`): base comunitaria, gratis, sin
+clave y con CORS abierto, así que sirve igual para la app y para la web. Cuando
+la letra viene en formato LRC (con marca de tiempo por línea) se resalta la
+línea actual y se desplaza sola; si solo hay letra plana, se muestra sin
+resaltar y se dice por qué.
+
+Dos detalles que costaron trabajo:
+
+**Los títulos de las emisoras hay que limpiarlos.** Vienen en mayúsculas, con el
+año pegado (`LA ENREDADERA 2012`), con varios artistas juntos y a veces con
+erratas. Se prueban tres formas del título, de la más literal a la más laxa, y
+se usa la duración que da la emisora para acertar con la versión correcta entre
+los resultados. Aun así, un título mal escrito en origen no se encuentra.
+
+**El sincronismo es el problema de verdad.** Los metadatos van en el reloj de la
+emisora, no en el tuyo: tú oyes el audio entre 10 y 30 segundos más tarde por el
+buffer del reproductor y del CDN. Hay dos casos:
+
+- **La Mega se sincroniza sola.** Su título viaja *dentro* del stream (ICY), así
+  que el momento en que ExoPlayer lo lee corresponde al inicio de la canción en
+  el audio. Como el reproductor va por delante de lo que suena, y sabe cuánto
+  (`totalBufferedDuration`), el desfase se calcula sin intervención.
+- **Olímpica necesita un ajuste manual.** No manda nada en banda, así que se
+  parte de una latencia estimada de 20 s y hay botones de ±1 s. El ajuste se
+  guarda por emisora.
+
+Si la radio rebuferea, el karaoke se descuadra hasta la siguiente canción.
+
 ### Publicar el repositorio (una sola vez)
 
 ```powershell

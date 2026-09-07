@@ -24,7 +24,19 @@ object NowPlaying {
     private const val POLL_MIN_MS = 15_000L
     private const val POLL_MAX_MS = 60_000L
 
-    data class Info(val texto: String?, val siguienteConsultaMs: Long)
+    data class Info(
+        /** Ya compuesto ("Artista · Título"), para mostrar en pantalla. */
+        val texto: String?,
+        /** Las partes sin juntar, que es lo que necesita la búsqueda de letra. */
+        val artista: String?,
+        val titulo: String?,
+        /** Momento en que la EMISORA empezó la canción (epoch ms), 0 si no viene. */
+        val cueStartWall: Long,
+        val duracionMs: Long,
+        val siguienteConsultaMs: Long
+    )
+
+    private val VACIA = Info(null, null, null, 0L, 0L, POLL_POR_DEFECTO_MS)
 
     /**
      * El separador " · " queda bien en pantalla pero estorba al buscar.
@@ -48,27 +60,34 @@ object NowPlaying {
                 readTimeout = TIMEOUT_MS
                 setRequestProperty("User-Agent", "RadioCO/${BuildConfig.VERSION_NAME}")
             }
-            if (conn.responseCode != 200) return Info(null, POLL_POR_DEFECTO_MS)
+            if (conn.responseCode != 200) return VACIA
             val xml = conn.inputStream.bufferedReader().use { it.readText() }
 
-            val titulo = CUE_TITLE.find(xml)?.groupValues?.get(1)?.trim()
-            val artista = ARTIST.find(xml)?.groupValues?.get(1)?.trim()
+            val titulo = limpiar(CUE_TITLE.find(xml)?.groupValues?.get(1))
+            val artista = limpiar(ARTIST.find(xml)?.groupValues?.get(1))
 
             // volver a preguntar justo cuando se acabe la canción, no antes
-            val duracion = DURACION.find(xml)?.groupValues?.get(1)?.toLongOrNull()
-            val inicio = INICIO.find(xml)?.groupValues?.get(1)?.toLongOrNull()
-            val espera = if (duracion != null && inicio != null) {
-                val restante = (inicio + duracion) - System.currentTimeMillis() + 3_000
-                restante.coerceIn(POLL_MIN_MS, POLL_MAX_MS)
+            val duracion = DURACION.find(xml)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+            val inicio = INICIO.find(xml)?.groupValues?.get(1)?.toLongOrNull() ?: 0L
+            val espera = if (duracion > 0 && inicio > 0) {
+                ((inicio + duracion) - System.currentTimeMillis() + 3_000)
+                    .coerceIn(POLL_MIN_MS, POLL_MAX_MS)
             } else {
                 POLL_POR_DEFECTO_MS
             }
 
-            return Info(componer(artista, titulo), espera)
+            return Info(
+                texto = componer(artista, titulo),
+                artista = artista,
+                titulo = titulo,
+                cueStartWall = inicio,
+                duracionMs = duracion,
+                siguienteConsultaMs = espera
+            )
         } catch (e: IOException) {
-            return Info(null, POLL_POR_DEFECTO_MS)
+            return VACIA
         } catch (e: Exception) {
-            return Info(null, POLL_POR_DEFECTO_MS)
+            return VACIA
         } finally {
             conn?.disconnect()
         }
@@ -87,15 +106,18 @@ object NowPlaying {
 
     /** Título tal y como llega en los metadatos ICY: "Artista - Cancion". */
     fun deIcy(raw: String?): String? {
-        val s = limpiar(raw) ?: return null
+        val partes = deIcyPartes(raw)
+        return componer(partes.first, partes.second) ?: limpiar(raw)?.let { bonito(it) }
+    }
+
+    /** Las mismas partes, sin juntar, para poder buscar la letra. */
+    fun deIcyPartes(raw: String?): Pair<String?, String?> {
+        val s = limpiar(raw) ?: return null to null
         val corte = s.indexOf(" - ")
-        return if (corte > 0) {
-            val a = s.substring(0, corte).trim()
-            val t = s.substring(corte + 3).trim()
-            if (a.isNotEmpty() && t.isNotEmpty()) "${bonito(a)} · ${bonito(t)}" else bonito(s)
-        } else {
-            bonito(s)
-        }
+        if (corte <= 0) return null to s
+        val a = s.substring(0, corte).trim()
+        val t = s.substring(corte + 3).trim()
+        return if (a.isNotEmpty() && t.isNotEmpty()) a to t else null to s
     }
 
     private val BASURA = setOf(

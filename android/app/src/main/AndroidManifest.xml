@@ -36,6 +36,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".LyricsActivity"
+            android:exported="false"
+            android:label="@string/lyrics"
+            android:parentActivityName=".MainActivity"
+            android:screenOrientation="portrait" />
+
         <service
             android:name=".PlaybackService"
             android:exported="true"
