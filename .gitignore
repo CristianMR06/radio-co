@@ -11,6 +11,9 @@ android/local.properties
 android/build.log
 android/build-exitcode.txt
 
+# --- capturas del emulador: material de trabajo, no fuente ---
+capturas/
+
 # --- IDE / varios ---
 .idea/
 *.iml
