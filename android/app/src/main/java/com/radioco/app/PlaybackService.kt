@@ -17,19 +17,12 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.extractor.metadata.icy.IcyInfo
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
-import androidx.media3.session.SessionCommand
-import androidx.media3.session.SessionResult
-import com.google.common.util.concurrent.Futures
-import com.google.common.util.concurrent.ListenableFuture
 import java.util.concurrent.Executors
 
 @UnstableApi
 class PlaybackService : MediaSessionService() {
 
     companion object {
-        const val CMD_SLEEP = "com.radioco.app.SLEEP"
-        const val EXTRA_MINUTES = "minutes"
-
         // Claves de los extras de la sesion: es como la pantalla de la letra
         // se entera de por donde va la cancion.
         const val EX_MODO = "sync_modo"            // "icy" | "triton"
@@ -45,7 +38,6 @@ class PlaybackService : MediaSessionService() {
 
     private var retries = 0
     private var retryPending: Runnable? = null
-    private var sleepPending: Runnable? = null
 
     /** Cancion que suena ahora, si la emisora la publica. */
     private var song: String? = null
@@ -90,7 +82,6 @@ class PlaybackService : MediaSessionService() {
         )
 
         session = MediaSession.Builder(this, player)
-            .setCallback(callback)
             .setSessionActivity(open)
             .build()
     }
@@ -104,7 +95,6 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         cancelRetry()
-        cancelSleep()
         cancelTriton()
         io.shutdownNow()
         handler.removeCallbacks(meterTick)
@@ -115,37 +105,6 @@ class PlaybackService : MediaSessionService() {
         }
         session = null
         super.onDestroy()
-    }
-
-    // ---------------------------------------------------------------- callback
-
-    private val callback = object : MediaSession.Callback {
-
-        override fun onConnect(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo
-        ): MediaSession.ConnectionResult {
-            val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS
-                .buildUpon()
-                .add(SessionCommand(CMD_SLEEP, Bundle.EMPTY))
-                .build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                .setAvailableSessionCommands(commands)
-                .build()
-        }
-
-        override fun onCustomCommand(
-            session: MediaSession,
-            controller: MediaSession.ControllerInfo,
-            customCommand: SessionCommand,
-            args: Bundle
-        ): ListenableFuture<SessionResult> {
-            if (customCommand.customAction == CMD_SLEEP) {
-                scheduleSleep(args.getInt(EXTRA_MINUTES, 0))
-                return Futures.immediateFuture(SessionResult(SessionResult.RESULT_SUCCESS))
-            }
-            return Futures.immediateFuture(SessionResult(SessionResult.RESULT_ERROR_NOT_SUPPORTED))
-        }
     }
 
     // ----------------------------------------------------------- reconexión
@@ -356,31 +315,4 @@ class PlaybackService : MediaSessionService() {
         tritonPending = null
     }
 
-    // ------------------------------------------------------------ temporizador
-
-    private fun scheduleSleep(minutes: Int) {
-        cancelSleep()
-        if (minutes <= 0) {
-            DataMeter.prefs(this).edit().putLong(DataMeter.K_SLEEP_AT, 0L).apply()
-            return
-        }
-        val at = System.currentTimeMillis() + minutes * 60_000L
-        DataMeter.prefs(this).edit().putLong(DataMeter.K_SLEEP_AT, at).apply()
-
-        val r = Runnable {
-            DataMeter.prefs(this).edit().putLong(DataMeter.K_SLEEP_AT, 0L).apply()
-            cancelRetry()
-            session?.player?.let {
-                it.stop()
-                it.clearMediaItems()
-            }
-        }
-        sleepPending = r
-        handler.postDelayed(r, minutes * 60_000L)
-    }
-
-    private fun cancelSleep() {
-        sleepPending?.let { handler.removeCallbacks(it) }
-        sleepPending = null
-    }
 }

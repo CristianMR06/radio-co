@@ -63,10 +63,6 @@ body[data-state="error"] h1 .dot{background:var(--err)}
 .card.on .icobtn.visible{display:block}
 
 .panel{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:12px}
-.row{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--dim)}
-.row label{flex:none;width:64px}
-input[type=range]{flex:1;accent-color:#38bdf8;height:22px}
-select{background:var(--card2);color:var(--txt);border:1px solid var(--line);border-radius:9px;padding:6px 8px;font-size:13px;flex:1}
 .reset{background:none;border:0;color:var(--dim);font-size:12px;text-decoration:underline;cursor:pointer;padding:0;display:block;margin-left:auto}
 
 /* ---- letra / karaoke ---- */
@@ -100,7 +96,6 @@ select{background:var(--card2);color:var(--txt);border:1px solid var(--line);bor
 .lyrsync button:hover{border-color:var(--dim)}
 .lyrsync .off{color:var(--txt);font-variant-numeric:tabular-nums;min-width:56px;text-align:center}
 .lyrsync .hint{flex:1 1 100%;font-size:11px;line-height:1.4}
-footer{color:var(--dim);font-size:11.5px;text-align:center;padding:4px 0 8px;line-height:1.55}
 </style>
 </head>
 <body data-state="idle">
@@ -139,29 +134,6 @@ footer{color:var(--dim);font-size:11.5px;text-align:center;padding:4px 0 8px;lin
     </div>
   </div>
 
-  <div class="panel">
-    <div class="row">
-      <label for="vol">Volumen</label>
-      <input type="range" id="vol" min="0" max="100" value="100">
-      <span id="volv" style="width:34px;text-align:right;color:var(--txt)">100</span>
-    </div>
-    <div class="row">
-      <label for="timer">Apagar</label>
-      <select id="timer">
-        <option value="0">No apagar</option>
-        <option value="15">En 15 minutos</option>
-        <option value="30">En 30 minutos</option>
-        <option value="60">En 1 hora</option>
-        <option value="120">En 2 horas</option>
-      </select>
-      <span id="tleft" style="min-width:52px;text-align:right;color:var(--txt);font-variant-numeric:tabular-nums"></span>
-    </div>
-  </div>
-
-  <footer>
-    Sin anuncios, sin rastreadores, sin imagenes que gasten datos.<br>
-    Solo el audio de la emisora.
-  </footer>
 </div>
 
 <script>
@@ -212,7 +184,6 @@ var variant = 0;      // indice del stream dentro de la emisora
 var retries = 0;
 var retryTimer = null;
 var stallTimer = null;
-var sleepAt = 0;
 var lastStation = STATIONS[0];
 var song = null;        // lo que suena ahora, si la emisora lo publica
 var songTimer = null;
@@ -419,6 +390,24 @@ function abrirEnYouTubeMusic(cancion) {
               "_blank", "noopener");
 }
 
+/* Si la referencia de LRCLIB dice lo mismo que la cabecera, no se ensena dos
+   veces. Se compara el titulo, y los artistas valen cuando uno es el principio
+   del otro ("Ryan Castro" vs "Ryan Castro Ft Kapo"). */
+function normalizar(v) {
+  return v.toLowerCase()
+    .replace(/[áàä]/g, "a").replace(/[éèë]/g, "e").replace(/[íìï]/g, "i")
+    .replace(/[óòö]/g, "o").replace(/[úùü]/g, "u").replace(/ñ/g, "n")
+    .replace(/[^a-z0-9]+/g, "");
+}
+
+function mismaCancion(a, b) {
+  var pa = a.split(" · "), pb = b.split(" · ");
+  if (pa.length < 2 || pb.length < 2) return normalizar(a) === normalizar(b);
+  if (normalizar(pa[pa.length - 1]) !== normalizar(pb[pb.length - 1])) return false;
+  var x = normalizar(pa[0]), y = normalizar(pb[0]);
+  return x.indexOf(y) === 0 || y.indexOf(x) === 0;
+}
+
 function paintStatus(st) {
   if (!current || current.id !== st.id) return;
   status(st, song ? "♪ " + song : "En directo · " + streamOf(st).label);
@@ -453,6 +442,10 @@ function parsearLrc(txt) {
     var marcas = l.match(/\[\d+:\d+(?:[.:]\d+)?\]/g);
     if (!marcas) return;                       // [ar:], [by:]... se ignoran
     var texto = l.replace(/\[[^\]]*\]/g, "").trim();
+    // Muchos LRC traen marcas sin texto para los silencios y el final. Si se
+    // guardan, la linea "actual" acaba siendo una vacia y parece que el
+    // karaoke se ha colgado.
+    if (!texto) return;
     marcas.forEach(function (m) {
       var p = m.slice(1, -1).split(":");
       lineas.push({
@@ -548,10 +541,14 @@ function cerrarLetra() {
 
 function pintarLetra() {
   var body = $("#lyrBody");
-  $("#lyrTit").textContent = song || "Nada sonando";
-  $("#lyrSub").textContent = letra && letra.ref
-    ? letra.ref
+  var titulo = song || "Nada sonando";
+  $("#lyrTit").textContent = titulo;
+
+  var ref = letra && letra.ref ? letra.ref : "";
+  var sub = (ref && !mismaCancion(titulo, ref))
+    ? ref
     : (current ? current.name + " · " + current.city : "");
+  $("#lyrSub").textContent = sub;
   $("#lyrSync").hidden = !(letra && letra.sincronizada);
   body.classList.toggle("plana", !!(letra && !letra.sincronizada));
 
@@ -732,31 +729,7 @@ setInterval(function () {
     usage.bytes += streamOf(current).kbps * 1000 / 8;
     paintUsage(); saveUsage();
   }
-  if (sleepAt) {
-    var left = Math.max(0, sleepAt - Date.now());
-    var m = Math.floor(left / 60000), sec = Math.floor(left % 60000 / 1000);
-    $("#tleft").textContent = m + ":" + String(sec).padStart(2, "0");
-    if (left <= 0) { sleepAt = 0; $("#timer").value = "0"; $("#tleft").textContent = ""; stop(); }
-  }
 }, 1000);
-
-/* ---------- volumen ---------- */
-var vol = $("#vol");
-vol.value = localStorage.getItem("radioco.vol") || "100";
-function applyVol() {
-  audio.volume = vol.value / 100;
-  $("#volv").textContent = vol.value;
-  try { localStorage.setItem("radioco.vol", vol.value); } catch (e) {}
-}
-vol.oninput = applyVol;
-applyVol();
-
-/* ---------- temporizador ---------- */
-$("#timer").onchange = function (e) {
-  var min = +e.target.value;
-  sleepAt = min ? Date.now() + min * 60000 : 0;
-  if (!min) $("#tleft").textContent = "";
-};
 
 /* ---------- controles del sistema / pantalla de bloqueo ---------- */
 function mediaMeta(st) {

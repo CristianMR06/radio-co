@@ -19,7 +19,6 @@ object DataMeter {
     private const val K_DAY = "day"
     private const val K_BYTES = "bytes"
     private const val K_LAST_RX = "lastRx"
-    const val K_SLEEP_AT = "sleepAt"
     const val K_LAST_CHECK = "lastUpdateCheck"
 
     private val fmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)

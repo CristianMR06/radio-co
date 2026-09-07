@@ -66,7 +66,7 @@ class LyricsActivity : AppCompatActivity() {
         b = ActivityLyricsBinding.inflate(layoutInflater)
         setContentView(b.root)
 
-        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        b.btnBack.setOnClickListener { finish() }
 
         b.btnMinus.setOnClickListener { ajustarOffset(-1000L) }
         b.btnPlus.setOnClickListener { ajustarOffset(1000L) }
@@ -194,7 +194,14 @@ class LyricsActivity : AppCompatActivity() {
 
     private fun pintar() {
         val l = letra
-        b.tvRef.text = l?.referencia ?: ""
+
+        // La referencia solo aporta cuando NO dice lo mismo que la cabecera
+        // (p.ej. cuando la version encontrada es de otro artista).
+        val cancion = b.tvSong.text?.toString().orEmpty()
+        val ref = l?.referencia.orEmpty()
+        val repetida = ref.isBlank() || Lyrics.mismaCancion(cancion, ref)
+        b.tvRef.text = ref
+        b.tvRef.visibility = if (repetida) View.GONE else View.VISIBLE
 
         val sincronizada = l != null && l.sincronizada
         b.syncBar.visibility = if (sincronizada) View.VISIBLE else View.GONE

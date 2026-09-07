@@ -2,8 +2,6 @@
     <string name="app_name">Radio CO</string>
     <string name="data_today">Datos de hoy</string>
     <string name="reset">reiniciar</string>
-    <string name="turn_off">Apagar</string>
-    <string name="footer">Sin anuncios, sin rastreadores, sin imágenes.\nSolo el audio de la emisora.</string>
     <string name="play">Reproducir</string>
     <string name="reset_done">Contador de datos reiniciado</string>
 
@@ -25,6 +23,7 @@
     <string name="no_music_app">No hay ninguna app para abrir la búsqueda</string>
 
     <string name="lyrics">Letra</string>
+    <string name="back">Volver</string>
     <string name="open_lyrics">Ver la letra de esta canción</string>
     <string name="lyrics_loading">Buscando la letra…</string>
     <string name="lyrics_not_found">No he encontrado la letra de esta canción.</string>
@@ -39,11 +38,4 @@
     <string name="sync_hint_auto">Esta emisora se sincroniza sola. Ajústalo solo si hace falta.</string>
     <string name="sync_hint_manual">Si la letra va adelantada, resta segundos. Si va atrasada, suma.</string>
 
-    <string-array name="timer_labels">
-        <item>No apagar</item>
-        <item>En 15 minutos</item>
-        <item>En 30 minutos</item>
-        <item>En 1 hora</item>
-        <item>En 2 horas</item>
-    </string-array>
 </resources>

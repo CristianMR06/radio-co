@@ -161,6 +161,10 @@ object Lyrics {
             val marcas = MARCA.findAll(l).toList()
             if (marcas.isEmpty()) continue          // [ar:], [by:]... se ignoran
             val texto = l.replace(CUALQUIER_ETIQUETA, "").trim()
+            // Muchos LRC traen marcas sin texto para los silencios y el final.
+            // Si se guardan, la linea "actual" acaba siendo una vacia y parece
+            // que el karaoke se ha colgado. Mejor dejar la ultima con letra.
+            if (texto.isBlank()) continue
             for (m in marcas) {
                 val min = m.groupValues[1].toLongOrNull() ?: continue
                 val seg = m.groupValues[2].replace(',', '.').toDoubleOrNull() ?: continue
@@ -168,6 +172,36 @@ object Lyrics {
             }
         }
         return salida.sortedBy { it.tMs }
+    }
+
+    // ------------------------------------------------- comparar dos titulos
+
+    private val NO_ALFANUM = Regex("""[^\p{L}\p{N}]+""")
+
+    private fun normalizar(s: String): String =
+        s.lowercase(Locale.ROOT)
+            .replace('á', 'a').replace('é', 'e').replace('í', 'i')
+            .replace('ó', 'o').replace('ú', 'u').replace('ü', 'u').replace('ñ', 'n')
+            .replace(NO_ALFANUM, "")
+
+    /**
+     * Si la referencia de LRCLIB dice practicamente lo mismo que el titulo de
+     * la emisora, no hace falta ensenar las dos. Se compara el titulo, y los
+     * artistas se dan por buenos cuando uno es el principio del otro
+     * ("Ryan Castro" vs "Ryan Castro Ft Kapo").
+     */
+    fun mismaCancion(a: String, b: String): Boolean {
+        val pa = a.split(" · ")
+        val pb = b.split(" · ")
+        if (pa.size < 2 || pb.size < 2) return normalizar(a) == normalizar(b)
+
+        val tituloA = normalizar(pa.last())
+        val tituloB = normalizar(pb.last())
+        if (tituloA != tituloB) return false
+
+        val artistaA = normalizar(pa.first())
+        val artistaB = normalizar(pb.first())
+        return artistaA.startsWith(artistaB) || artistaB.startsWith(artistaA)
     }
 
     // --------------------------------------------------------------- formato

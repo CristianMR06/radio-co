@@ -13,15 +13,12 @@ import android.os.Looper
 import android.text.format.DateFormat
 import android.text.format.Formatter
 import android.view.View
-import android.widget.AdapterView
-import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
-import androidx.media3.session.SessionCommand
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
@@ -40,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     private var controller: MediaController? = null
 
     private val handler = Handler(Looper.getMainLooper())
-    private val minutes = intArrayOf(0, 15, 30, 60, 120)
 
     // ---- actualizaciones
     private enum class Upd { IDLE, CHECKING, UPTODATE, AVAILABLE, DOWNLOADING, READY, NEED_PERM, FAILED }
@@ -58,7 +54,6 @@ class MainActivity : AppCompatActivity() {
         override fun run() {
             paintClock()
             paintData()
-            paintTimer()
             pollDownload()
             handler.postDelayed(this, 1_000)
         }
@@ -75,17 +70,6 @@ class MainActivity : AppCompatActivity() {
             DataMeter.reset(this)
             paintData()
             Toast.makeText(this, R.string.reset_done, Toast.LENGTH_SHORT).show()
-        }
-
-        b.spTimer.adapter = ArrayAdapter.createFromResource(
-            this, R.array.timer_labels, android.R.layout.simple_spinner_dropdown_item
-        )
-        b.spTimer.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
-                sendSleep(minutes.getOrElse(pos) { 0 })
-            }
-
-            override fun onNothingSelected(p: AdapterView<*>?) {}
         }
 
         b.tvVersion.text = getString(R.string.version_fmt, BuildConfig.VERSION_NAME)
@@ -169,13 +153,6 @@ class MainActivity : AppCompatActivity() {
             c.play()
         }
         render()
-    }
-
-    private fun sendSleep(min: Int) {
-        val c = controller ?: return
-        val args = Bundle().apply { putInt(PlaybackService.EXTRA_MINUTES, min) }
-        c.sendCustomCommand(SessionCommand(PlaybackService.CMD_SLEEP, Bundle.EMPTY), args)
-        if (min == 0) b.tvTimeLeft.text = ""
     }
 
     // ------------------------------------------------------------ actualizaciones
@@ -433,23 +410,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun paintData() {
         b.tvData.text = DataMeter.format(DataMeter.bytesToday(this)) + " MB"
-    }
-
-    private fun paintTimer() {
-        val at = DataMeter.prefs(this).getLong(DataMeter.K_SLEEP_AT, 0L)
-        if (at <= 0L) {
-            b.tvTimeLeft.text = ""
-            return
-        }
-        val left = at - System.currentTimeMillis()
-        if (left <= 0L) {
-            b.tvTimeLeft.text = ""
-            if (b.spTimer.selectedItemPosition != 0) b.spTimer.setSelection(0)
-            return
-        }
-        val m = left / 60_000
-        val s = left % 60_000 / 1_000
-        b.tvTimeLeft.text = String.format("%d:%02d", m, s)
     }
 
     // --------------------------------------------------------------- permisos

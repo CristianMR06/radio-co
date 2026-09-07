@@ -4,37 +4,66 @@
     android:layout_height="match_parent"
     android:background="@color/bg"
     android:orientation="vertical"
-    android:padding="16dp">
+    android:paddingStart="16dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="16dp"
+    android:paddingBottom="16dp">
 
-    <!-- cabecera -->
-    <TextView
-        android:id="@+id/tvSong"
+    <!-- cabecera: flecha de volver + que suena -->
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:ellipsize="end"
-        android:maxLines="2"
-        android:textColor="@color/txt"
-        android:textSize="19sp"
-        android:textStyle="bold" />
+        android:orientation="horizontal">
 
-    <TextView
-        android:id="@+id/tvRef"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="2dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@color/dim"
-        android:textSize="13sp" />
+        <ImageView
+            android:id="@+id/btnBack"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="-10dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/back"
+            android:padding="10dp"
+            android:src="@drawable/ic_back" />
 
-    <!-- letra -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/tvSong"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="@color/txt"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvRef"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="1dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/dim"
+                android:textSize="12sp"
+                android:visibility="gone" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- letra: con degradado arriba y abajo para que no corte en seco -->
     <ScrollView
         android:id="@+id/scroll"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="6dp"
         android:layout_weight="1"
+        android:fadingEdgeLength="36dp"
+        android:requiresFadingEdge="vertical"
         android:scrollbars="none">
 
         <LinearLayout
@@ -42,8 +71,8 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:paddingTop="8dp"
-            android:paddingBottom="120dp" />
+            android:paddingTop="24dp"
+            android:paddingBottom="140dp" />
     </ScrollView>
 
     <TextView
@@ -60,13 +89,13 @@
         android:id="@+id/syncBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
+        android:layout_marginTop="10dp"
         android:background="@drawable/card_bg"
         android:orientation="vertical"
         android:paddingStart="14dp"
-        android:paddingTop="10dp"
+        android:paddingTop="8dp"
         android:paddingEnd="14dp"
-        android:paddingBottom="10dp"
+        android:paddingBottom="8dp"
         android:visibility="gone">
 
         <LinearLayout
@@ -88,7 +117,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
-                android:minWidth="48dp"
+                android:gravity="center"
+                android:minWidth="52dp"
                 android:padding="8dp"
                 android:text="@string/sync_minus"
                 android:textColor="@color/txt"
@@ -109,7 +139,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:background="?attr/selectableItemBackground"
-                android:minWidth="48dp"
+                android:gravity="center"
+                android:minWidth="52dp"
                 android:padding="8dp"
                 android:text="@string/sync_plus"
                 android:textColor="@color/txt"
@@ -121,7 +152,7 @@
             android:id="@+id/tvSyncHint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
+            android:layout_marginTop="1dp"
             android:textColor="@color/dim"
             android:textSize="11sp" />
     </LinearLayout>
