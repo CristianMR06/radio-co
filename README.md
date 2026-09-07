@@ -61,12 +61,13 @@ No se puede publicar como Artifact de Claude: su CSP bloquea las peticiones a
 dominios externos y ahí es justo donde vive el audio.
 
 Incluye:
+- reloj y fecha,
 - contador de datos del día (estimado por bitrate) con botón de reinicio,
-- volumen persistente,
-- temporizador de apagado,
+- qué suena ahora en Olímpica, y su letra en modo karaoke,
 - reconexión automática y cambio al stream de respaldo,
 - controles del sistema vía Media Session API,
-- service worker que **solo** cachea la propia página, nunca el audio.
+- service worker que sirve la página **primero desde la red**, para que una
+  versión nueva no se quede atrapada en la caché.
 
 `make_icons.py` regenera los iconos si quieres cambiar el diseño.
 
@@ -77,15 +78,15 @@ Incluye:
 App nativa en Kotlin con Media3/ExoPlayer. APK ya compilado:
 
 ```
-android/app/build/outputs/apk/release/app-release.apk   (2,8 MB)
+android/app/build/outputs/apk/release/app-release.apk   (2,7 MB)
 ```
 
-Copia lista para pasar al móvil: `~/Downloads/RadioCO-1.0.apk`
+O directamente desde https://github.com/CristianMR06/radio-co/releases/latest
 
 Instalar por cable:
 
 ```bash
-adb install -r C:/Users/PORCEN038/Downloads/RadioCO-1.0.apk
+adb install -r C:/Users/PORCEN038/Downloads/RadioCO-1.6.apk
 ```
 
 O copiar el APK al teléfono y abrirlo (hay que permitir "instalar apps
@@ -96,7 +97,7 @@ Qué hace:
 - notificación y controles en la pantalla de bloqueo (MediaSession),
 - respeta el foco de audio (llamadas, otras apps) y pausa al quitar auriculares,
 - **mide los datos reales** consumidos por la app con `TrafficStats`, por día,
-- temporizador de apagado que sobrevive a cerrar la pantalla,
+- qué suena ahora en las dos emisoras, con letra y modo karaoke,
 - buffer corto (10 s) para arrancar rápido sin descargar audio que se va a tirar,
 - reconexión automática con cambio de stream, igual que la web.
 
