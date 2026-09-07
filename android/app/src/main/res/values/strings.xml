@@ -2,6 +2,10 @@
     <string name="app_name">Radio CO</string>
     <string name="data_today">Datos de hoy</string>
     <string name="reset">reiniciar</string>
+    <string name="stations_label">Emisoras</string>
+    <string name="music">YouTube Music</string>
+    <string name="connecting">Conectando…</string>
+    <string name="no_signal">Sin señal, reintentando…</string>
     <string name="play">Reproducir</string>
     <string name="reset_done">Contador de datos reiniciado</string>
 

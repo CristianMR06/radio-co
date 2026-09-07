@@ -1,10 +1,15 @@
 package com.radioco.app
 
 import android.Manifest
+import android.animation.ObjectAnimator
+import android.animation.ValueAnimator
 import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -13,9 +18,11 @@ import android.os.Looper
 import android.text.format.DateFormat
 import android.text.format.Formatter
 import android.view.View
+import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.ColorUtils
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.session.MediaController
@@ -24,7 +31,9 @@ import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.radioco.app.databinding.ActivityMainBinding
 import com.radioco.app.databinding.ItemStationBinding
+import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Locale
 import java.util.concurrent.Executors
 
 @UnstableApi
@@ -49,6 +58,15 @@ class MainActivity : AppCompatActivity() {
 
     /** Respeta el formato de 12/24 h que tenga configurado el movil. */
     private val horaFmt by lazy { DateFormat.getTimeFormat(this) }
+    /**
+     * La fecha va en espanol a proposito: toda la app esta en espanol, y con
+     * el idioma del movil saldria "Monday, 7 September". La HORA si respeta
+     * el ajuste del movil (12/24 h), que eso es preferencia del usuario.
+     */
+    private val fechaFmt by lazy { SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es")) }
+
+    /** Un animador por barra del ecualizador, por emisora. */
+    private val eqAnims = HashMap<String, List<ObjectAnimator>>()
 
     private val tick = object : Runnable {
         override fun run() {
@@ -89,7 +107,12 @@ class MainActivity : AppCompatActivity() {
             row.tvName.text = st.name
             row.tvCity.text = st.city
             row.tvTag.text = "${st.streams[0].label}\n~${st.mbPerHour} MB/h"
-            row.icon.backgroundTintList = android.content.res.ColorStateList.valueOf(st.accent)
+            row.iconBg.backgroundTintList = ColorStateList.valueOf(st.accent)
+            row.icon.imageTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_accent))
+            val tinte = ColorStateList.valueOf(st.accent)
+            row.btnLyrics.compoundDrawableTintList = tinte
+            row.btnSong.compoundDrawableTintList = tinte
             row.rowRoot.setOnClickListener { toggle(st) }
             b.containerStations.addView(row.root)
             rows[st.id] = row
@@ -123,6 +146,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         handler.removeCallbacks(tick)
+        rows.forEach { (id, row) -> eqParar(id, row) }
         controller?.removeListener(playerListener)
         controller = null
         future?.let { MediaController.releaseFuture(it) }
@@ -362,50 +386,88 @@ class MainActivity : AppCompatActivity() {
         for (st in Stations.all) {
             val row = rows[st.id] ?: continue
             val on = live && st.id == activeId
-            row.icon.setImageResource(if (on) R.drawable.ic_stop else R.drawable.ic_play)
-            row.tvStatus.setTextColor(
-                if (on) st.accent else ContextCompat.getColor(this, R.color.dim)
-            )
+            val sonando = on && c!!.isPlaying
+
             // el servicio pone la cancion como titulo cuando la emisora la
             // publica; si no, el titulo sigue siendo el nombre de la emisora
             val cancion =
-                if (on && c!!.isPlaying) c.mediaMetadata.title?.toString()?.takeIf { it != st.name }
+                if (sonando) c!!.mediaMetadata.title?.toString()?.takeIf { it != st.name }
                 else null
 
-            val hayCancion = cancion != null
-            row.btnSong.visibility = if (hayCancion) View.VISIBLE else View.GONE
-            row.btnLyrics.visibility = if (hayCancion) View.VISIBLE else View.GONE
-            // el bitrate cabe cuando no hay iconos; con cancion, mandan los iconos
-            row.tvTag.visibility = if (hayCancion) View.GONE else View.VISIBLE
+            row.rowRoot.background = fondoTarjeta(on, st.accent)
+            row.icon.setImageResource(if (on) R.drawable.ic_stop else R.drawable.ic_play)
+
+            // la tarjeta activa crece: es el foco de la pantalla
+            row.expand.visibility = if (on) View.VISIBLE else View.GONE
+            row.pills.visibility = if (cancion != null) View.VISIBLE else View.GONE
+            row.tvTag.visibility = if (on) View.GONE else View.VISIBLE
+
+            row.eq.visibility = if (sonando) View.VISIBLE else View.GONE
+            if (sonando) eqArrancar(st, row) else eqParar(st.id, row)
+
+            row.tvStatus.setTextColor(
+                ContextCompat.getColor(this, if (cancion != null) R.color.txt else R.color.dim)
+            )
+            row.tvStatus.text = when {
+                !on -> ""
+                cancion != null -> "♪  " + cancion
+                c!!.isPlaying ->
+                    "En directo · " + Stations.streamOf(
+                        st, Stations.parseVariant(c.currentMediaItem?.mediaId)
+                    ).label
+
+                c.playbackState == Player.STATE_BUFFERING -> getString(R.string.connecting)
+                else -> getString(R.string.no_signal)
+            }
 
             row.btnSong.setOnClickListener { cancion?.let { buscarCancion(it) } }
             row.btnLyrics.setOnClickListener { abrirLetra() }
-
-            row.tvStatus.text = when {
-                !on -> ""
-                c!!.isPlaying -> cancion?.let { "♪ $it" } ?: run {
-                    val v = Stations.parseVariant(c.currentMediaItem?.mediaId)
-                    "En directo · " + Stations.streamOf(st, v).label
-                }
-
-                c.playbackState == Player.STATE_BUFFERING -> "Conectando…"
-                else -> "Sin señal, reintentando…"
-            }
         }
-
-        val dot = when {
-            c == null -> R.color.dim
-            c.isPlaying -> R.color.ok
-            c.playbackState == Player.STATE_BUFFERING -> R.color.warn
-            c.playerError != null -> R.color.err
-            else -> R.color.dim
-        }
-        b.dotState.backgroundTintList =
-            android.content.res.ColorStateList.valueOf(ContextCompat.getColor(this, dot))
     }
 
+    /** Sin borde cuando esta apagada; con el acento marcado cuando suena. */
+    private fun fondoTarjeta(activa: Boolean, accent: Int): Drawable =
+        GradientDrawable().apply {
+            cornerRadius = dp(24).toFloat()
+            setColor(
+                ContextCompat.getColor(
+                    this@MainActivity, if (activa) R.color.card2 else R.color.card
+                )
+            )
+            if (activa) setStroke(dp(2), ColorUtils.setAlphaComponent(accent, 120))
+        }
+
+    private fun eqArrancar(st: Station, row: ItemStationBinding) {
+        if (eqAnims.containsKey(st.id)) return          // ya esta animando
+        val barras = listOf(row.bar1, row.bar2, row.bar3)
+        val duraciones = listOf(420L, 660L, 520L)
+        val anims = barras.mapIndexed { i, v ->
+            v.backgroundTintList = ColorStateList.valueOf(st.accent)
+            v.post { v.pivotY = v.height.toFloat() }    // que crezca desde abajo
+            ObjectAnimator.ofFloat(v, "scaleY", 0.22f, 1f).apply {
+                duration = duraciones[i]
+                startDelay = i * 90L
+                repeatMode = ValueAnimator.REVERSE
+                repeatCount = ValueAnimator.INFINITE
+                interpolator = AccelerateDecelerateInterpolator()
+                start()
+            }
+        }
+        eqAnims[st.id] = anims
+    }
+
+    private fun eqParar(id: String, row: ItemStationBinding) {
+        eqAnims.remove(id)?.forEach { it.cancel() }
+        listOf(row.bar1, row.bar2, row.bar3).forEach { it.scaleY = 1f }
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
     private fun paintClock() {
-        b.tvClock.text = horaFmt.format(Date())
+        val ahora = Date()
+        b.tvClock.text = horaFmt.format(ahora)
+        b.tvDate.text = fechaFmt.format(ahora)
+            .replaceFirstChar { if (it.isLowerCase()) it.titlecase(Locale("es")) else it.toString() }
     }
 
     private fun paintData() {

@@ -1,14 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg">#FF0B0F14</color>
-    <color name="card">#FF151B23</color>
-    <color name="line">#FF242F3B</color>
-    <color name="txt">#FFE8EEF5</color>
-    <color name="dim">#FF8B9AAB</color>
+    <!-- Fondo mas profundo y superficies sin borde: el contraste lo dan los
+         propios tonos, no las lineas de 1px (que envejecen mucho). -->
+    <color name="bg">#FF080B10</color>
+    <color name="card">#FF141A23</color>
+    <color name="card2">#FF1C242F</color>
+    <color name="pill">#FF222B37</color>
+    <color name="line">#FF222B37</color>
+
+    <color name="txt">#FFF2F6FA</color>
+    <color name="dim">#FF8494A6</color>
+    <color name="dim2">#FF5D6B7C</color>
+
     <color name="ok">#FF34D399</color>
     <color name="warn">#FFFBBF24</color>
     <color name="err">#FFF87171</color>
-    <color name="accent_olimpica">#FFFB7185</color>
-    <color name="accent_mega">#FF38BDF8</color>
+
+    <color name="accent_olimpica">#FFFF7A93</color>
+    <color name="accent_mega">#FF48C6F5</color>
     <color name="on_accent">#FF08111A</color>
 </resources>

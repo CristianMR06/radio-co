@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Boton en forma de pastilla, para las acciones de la cancion -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/pill" />
+    <corners android:radius="100dp" />
+</shape>
