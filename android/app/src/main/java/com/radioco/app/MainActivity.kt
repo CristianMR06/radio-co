@@ -20,6 +20,7 @@ import android.text.format.Formatter
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
@@ -30,6 +31,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.radioco.app.databinding.ActivityMainBinding
+import com.radioco.app.databinding.ItemMediaBinding
 import com.radioco.app.databinding.ItemStationBinding
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -41,6 +43,23 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityMainBinding
     private val rows = LinkedHashMap<String, ItemStationBinding>()
+    private val mediaRows = LinkedHashMap<String, ItemMediaBinding>()
+
+    /** Copias en curso: id de la ranura -> porcentaje. */
+    private val copiando = HashMap<String, Int>()
+    private val fallos = HashSet<String>()
+    private var ranuraPendiente: Ranura? = null
+
+    /**
+     * Selector del sistema. Se registra aqui (no en onCreate) porque tiene que
+     * existir antes de que la Activity arranque del todo.
+     */
+    private val selector =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            val r = ranuraPendiente
+            ranuraPendiente = null
+            if (uri != null && r != null) importar(r, uri)
+        }
 
     private var future: ListenableFuture<MediaController>? = null
     private var controller: MediaController? = null
@@ -83,6 +102,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(b.root)
 
         buildRows()
+        buildMediaRows()
 
         b.btnReset.setOnClickListener {
             DataMeter.reset(this)
@@ -146,7 +166,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         handler.removeCallbacks(tick)
-        rows.forEach { (id, row) -> eqParar(id, row) }
+        rows.forEach { (id, r) -> eqParar(id, listOf(r.bar1, r.bar2, r.bar3)) }
+        mediaRows.forEach { (id, r) -> eqParar(id, listOf(r.bar1, r.bar2, r.bar3)) }
         controller?.removeListener(playerListener)
         controller = null
         future?.let { MediaController.releaseFuture(it) }
@@ -403,7 +424,8 @@ class MainActivity : AppCompatActivity() {
             row.tvTag.visibility = if (on) View.GONE else View.VISIBLE
 
             row.eq.visibility = if (sonando) View.VISIBLE else View.GONE
-            if (sonando) eqArrancar(st, row) else eqParar(st.id, row)
+            val barras = listOf(row.bar1, row.bar2, row.bar3)
+            if (sonando) eqArrancar(st.id, st.accent, barras) else eqParar(st.id, barras)
 
             row.tvStatus.setTextColor(
                 ContextCompat.getColor(this, if (cancion != null) R.color.txt else R.color.dim)
@@ -423,6 +445,158 @@ class MainActivity : AppCompatActivity() {
             row.btnSong.setOnClickListener { cancion?.let { buscarCancion(it) } }
             row.btnLyrics.setOnClickListener { abrirLetra() }
         }
+
+        renderMedios()
+    }
+
+    // --------------------------------------------------------------- medios
+
+    private fun buildMediaRows() {
+        for (r in Medios.ranuras) {
+            val row = ItemMediaBinding.inflate(layoutInflater, b.containerMedia, false)
+            row.iconBg.backgroundTintList = ColorStateList.valueOf(r.accent)
+            row.icon.imageTintList =
+                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_accent))
+            row.rowRoot.setOnClickListener { pulsarMedio(r) }
+            row.btnDelete.setOnClickListener { borrarMedio(r) }
+            b.containerMedia.addView(row.root)
+            mediaRows[r.id] = row
+        }
+        b.lblMedia.visibility = View.VISIBLE
+        b.containerMedia.visibility = View.VISIBLE
+    }
+
+    /** Esta sonando este medio ahora mismo? */
+    private fun sonando(r: Ranura): Boolean {
+        val c = controller ?: return false
+        return Medios.parseRanura(c.currentMediaItem?.mediaId)?.id == r.id &&
+            (c.isPlaying || c.playWhenReady)
+    }
+
+    /**
+     * Un solo boton para los dos casos: si el hueco esta vacio abre el selector
+     * del movil, y si ya hay archivo lo reproduce (o lo para). Nunca hay red
+     * por medio.
+     */
+    private fun pulsarMedio(r: Ranura) {
+        if (copiando.containsKey(r.id)) return          // se esta copiando
+
+        if (!Medios.guardado(this, r)) {
+            ranuraPendiente = r
+            try {
+                selector.launch(r.mimes)
+            } catch (e: Exception) {
+                ranuraPendiente = null
+                fallos.add(r.id)
+                renderMedios()
+            }
+            return
+        }
+
+        when (r.tipo) {
+            TipoMedio.VIDEO ->
+                startActivity(
+                    Intent(this, VideoActivity::class.java)
+                        .putExtra(VideoActivity.EXTRA_ID, r.id)
+                )
+
+            TipoMedio.AUDIO -> {
+                val c = controller ?: return
+                if (sonando(r)) {
+                    c.stop()
+                    c.clearMediaItems()
+                } else {
+                    c.setMediaItem(Medios.mediaItem(this, r))
+                    c.prepare()
+                    c.play()
+                }
+            }
+        }
+        render()
+    }
+
+    private fun importar(r: Ranura, uri: android.net.Uri) {
+        copiando[r.id] = 0
+        fallos.remove(r.id)
+        renderMedios()
+
+        try {
+            io.execute {
+                val ok = Medios.importar(this, r, uri) { copiados, total ->
+                    val pct = if (total > 0) ((copiados * 100) / total).toInt() else 0
+                    handler.post {
+                        if (copiando.containsKey(r.id)) {
+                            copiando[r.id] = pct
+                            renderMedios()
+                        }
+                    }
+                }
+                handler.post {
+                    if (isFinishing || isDestroyed) return@post
+                    copiando.remove(r.id)
+                    if (!ok) fallos.add(r.id)
+                    renderMedios()
+                }
+            }
+        } catch (e: Exception) {
+            copiando.remove(r.id)
+            fallos.add(r.id)
+            renderMedios()
+        }
+    }
+
+    private fun borrarMedio(r: Ranura) {
+        if (sonando(r)) {
+            controller?.stop()
+            controller?.clearMediaItems()
+        }
+        Medios.borrar(this, r)
+        Toast.makeText(this, R.string.media_deleted, Toast.LENGTH_SHORT).show()
+        renderMedios()
+    }
+
+    private fun renderMedios() {
+        for (r in Medios.ranuras) {
+            val row = mediaRows[r.id] ?: continue
+            val pct = copiando[r.id]
+            val guardado = Medios.guardado(this, r)
+            val suena = sonando(r)
+
+            row.tvName.text = Medios.nombre(this, r) ?: r.etiqueta
+            row.rowRoot.background = fondoTarjeta(suena, r.accent)
+            row.icon.setImageResource(
+                when {
+                    !guardado -> R.drawable.ic_download
+                    suena -> R.drawable.ic_stop
+                    else -> R.drawable.ic_play
+                }
+            )
+
+            val barras = listOf(row.bar1, row.bar2, row.bar3)
+            row.eq.visibility = if (suena) View.VISIBLE else View.GONE
+            if (suena) eqArrancar(r.id, r.accent, barras) else eqParar(r.id, barras)
+
+            row.pb.visibility = if (pct != null) View.VISIBLE else View.GONE
+            if (pct != null) row.pb.progress = pct
+            row.btnDelete.visibility = if (guardado && pct == null) View.VISIBLE else View.GONE
+
+            row.tvSub.text = if (guardado) {
+                r.etiqueta + " · " + Formatter.formatShortFileSize(this, Medios.tamano(this, r))
+            } else {
+                r.etiqueta
+            }
+
+            row.tvEstado.text = when {
+                pct != null -> getString(R.string.media_copying, pct)
+                fallos.contains(r.id) -> getString(R.string.media_failed)
+                suena -> getString(R.string.media_playing)
+                guardado -> getString(R.string.media_saved)
+                else -> getString(R.string.media_pick)
+            }
+            row.tvEstado.setTextColor(
+                ContextCompat.getColor(this, if (guardado) R.color.dim else R.color.txt)
+            )
+        }
     }
 
     /** Sin borde cuando esta apagada; con el acento marcado cuando suena. */
@@ -437,12 +611,11 @@ class MainActivity : AppCompatActivity() {
             if (activa) setStroke(dp(2), ColorUtils.setAlphaComponent(accent, 120))
         }
 
-    private fun eqArrancar(st: Station, row: ItemStationBinding) {
-        if (eqAnims.containsKey(st.id)) return          // ya esta animando
-        val barras = listOf(row.bar1, row.bar2, row.bar3)
+    private fun eqArrancar(id: String, accent: Int, barras: List<View>) {
+        if (eqAnims.containsKey(id)) return             // ya esta animando
         val duraciones = listOf(420L, 660L, 520L)
         val anims = barras.mapIndexed { i, v ->
-            v.backgroundTintList = ColorStateList.valueOf(st.accent)
+            v.backgroundTintList = ColorStateList.valueOf(accent)
             v.post { v.pivotY = v.height.toFloat() }    // que crezca desde abajo
             ObjectAnimator.ofFloat(v, "scaleY", 0.22f, 1f).apply {
                 duration = duraciones[i]
@@ -453,12 +626,12 @@ class MainActivity : AppCompatActivity() {
                 start()
             }
         }
-        eqAnims[st.id] = anims
+        eqAnims[id] = anims
     }
 
-    private fun eqParar(id: String, row: ItemStationBinding) {
+    private fun eqParar(id: String, barras: List<View>) {
         eqAnims.remove(id)?.forEach { it.cancel() }
-        listOf(row.bar1, row.bar2, row.bar3).forEach { it.scaleY = 1f }
+        barras.forEach { it.scaleY = 1f }
     }
 
     private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()

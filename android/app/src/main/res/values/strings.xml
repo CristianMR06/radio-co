@@ -3,6 +3,14 @@
     <string name="data_today">Datos de hoy</string>
     <string name="reset">reiniciar</string>
     <string name="stations_label">Emisoras</string>
+    <string name="media_label">Mis medios</string>
+    <string name="media_pick">Elegir archivo del móvil</string>
+    <string name="media_copying">Copiando… %1$d%%</string>
+    <string name="media_saved">En el móvil · no gasta datos</string>
+    <string name="media_failed">No se pudo copiar el archivo</string>
+    <string name="media_delete">borrar copia</string>
+    <string name="media_deleted">Copia borrada del móvil</string>
+    <string name="media_playing">Sonando</string>
     <string name="music">YouTube Music</string>
     <string name="connecting">Conectando…</string>
     <string name="no_signal">Sin señal, reintentando…</string>

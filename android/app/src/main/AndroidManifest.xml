@@ -37,6 +37,13 @@
         </activity>
 
         <activity
+            android:name=".VideoActivity"
+            android:configChanges="orientation|screenSize|keyboardHidden|smallestScreenSize|screenLayout"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.RadioCO" />
+
+        <activity
             android:name=".LyricsActivity"
             android:exported="false"
             android:label="@string/lyrics"

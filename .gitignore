@@ -11,6 +11,9 @@ android/local.properties
 android/build.log
 android/build-exitcode.txt
 
+# --- medios originales: de momento no se suben hasta decidir donde viven ---
+medios/
+
 # --- capturas del emulador: material de trabajo, no fuente ---
 capturas/
 

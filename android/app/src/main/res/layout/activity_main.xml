@@ -106,6 +106,28 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
+        <!-- medios propios: la etiqueta y la lista se ocultan si no hay ninguno -->
+        <TextView
+            android:id="@+id/lblMedia"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:letterSpacing="0.12"
+            android:text="@string/media_label"
+            android:textAllCaps="true"
+            android:textColor="@color/dim2"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
+        <LinearLayout
+            android:id="@+id/containerMedia"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
         <!-- un poco mas de peso abajo: el bloque queda algo por encima del
              centro optico, que se lee mejor que justo en el medio -->
         <View

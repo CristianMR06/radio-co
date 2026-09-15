@@ -135,6 +135,37 @@ buffer del reproductor y del CDN. Hay dos casos:
 
 Si la radio rebuferea, el karaoke se descuadra hasta la siguiente canción.
 
+### Mis medios (archivos propios del móvil)
+
+Además de las emisoras, la app reproduce dos archivos tuyos: un audio y un
+vídeo. La idea es que si siempre pones los mismos, no tiene sentido que gasten
+datos cada vez.
+
+**No se descargan de ningún sitio.** Los eliges con el selector del sistema y la
+app se queda con una copia en su carpeta:
+
+```
+Android/data/com.radioco.app/files/medios/
+```
+
+A partir de ahí todo sale del disco: la reproducción **no toca la red ni una
+sola vez**. Se copia en vez de guardar solo una referencia para que da igual que
+luego muevas o borres el original; la copia sobrevive a las actualizaciones de
+la app y solo se va si desinstalas o pulsas «borrar copia».
+
+Detalles de implementación:
+
+- El audio va por el mismo `PlaybackService` que las emisoras, así que suena en
+  segundo plano y con controles en la pantalla de bloqueo.
+- El vídeo tiene pantalla propia (`VideoActivity`), a pantalla completa y sin
+  dejar que se apague. Al arrancar, la radio se para **sola**: no hay
+  coordinación entre los dos reproductores, lo resuelve el foco de audio.
+- El `mediaId` de un medio es `media:<ranura>`, con prefijo para que
+  `Stations.parseStation()` devuelva `null` y ni Triton ni ICY se metan donde no
+  les toca.
+- La copia se escribe a un `.parcial` y solo se renombra al terminar, para que
+  un fallo a medias no deje un fichero roto con pinta de bueno.
+
 ### Publicar el repositorio (una sola vez)
 
 ```powershell
