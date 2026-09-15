@@ -114,6 +114,20 @@
         android:visibility="gone" />
 
     <TextView
+        android:id="@+id/btnUrl"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:background="?attr/selectableItemBackground"
+        android:paddingTop="4dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="4dp"
+        android:text="@string/media_or_url"
+        android:textColor="@color/dim2"
+        android:textSize="12sp"
+        android:visibility="gone" />
+
+    <TextView
         android:id="@+id/btnDelete"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"

@@ -5,6 +5,14 @@
     <string name="stations_label">Emisoras</string>
     <string name="media_label">Mis medios</string>
     <string name="media_pick">Elegir archivo del móvil</string>
+    <string name="media_or_url">o pegar un enlace</string>
+    <string name="media_url_title">Enlace al archivo</string>
+    <string name="media_url_hint">https://…</string>
+    <string name="media_url_help">Tiene que ser un enlace directo al archivo y empezar por https. Se descarga una vez y se queda en el móvil.</string>
+    <string name="media_url_bad">Ese enlace no vale: tiene que empezar por https:// (Android bloquea las descargas sin cifrar)</string>
+    <string name="media_downloading">Descargando… %1$d%%</string>
+    <string name="ok">Descargar</string>
+    <string name="cancel">Cancelar</string>
     <string name="media_copying">Copiando… %1$d%%</string>
     <string name="media_saved">En el móvil · no gasta datos</string>
     <string name="media_failed">No se pudo copiar el archivo</string>

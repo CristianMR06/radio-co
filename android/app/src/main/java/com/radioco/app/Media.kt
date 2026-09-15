@@ -1,6 +1,8 @@
 package com.radioco.app
 
+import android.app.DownloadManager
 import android.content.Context
+import android.database.Cursor
 import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.media3.common.MediaItem
@@ -146,6 +148,83 @@ object Medios {
             }
         } catch (e: Exception) {
             null
+        }
+    }
+
+    // ------------------------------------------- descargar de una URL propia
+
+    /**
+     * Alternativa a elegir el archivo del movil: bajarlo de un enlace que pone
+     * el usuario (su Drive, su servidor, lo que sea). Solo ocurre esta vez; a
+     * partir de aqui se reproduce del disco como cualquier otro medio.
+     */
+    fun descargar(ctx: Context, r: Ranura, url: String): Long {
+        val parcial = File(carpeta(ctx), "${r.id}.parcial")
+        if (parcial.exists()) parcial.delete()
+
+        val req = DownloadManager.Request(Uri.parse(url))
+            .setTitle(r.etiqueta)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+            .setDestinationInExternalFilesDir(ctx, "medios", parcial.name)
+            .setAllowedOverMetered(true)
+
+        val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        return dm.enqueue(req)
+    }
+
+    /** Pasa el .parcial a su sitio. Igual que al importar: nada a medias. */
+    fun finalizarDescarga(ctx: Context, r: Ranura, url: String): Boolean {
+        val parcial = File(carpeta(ctx), "${r.id}.parcial")
+        val destino = fichero(ctx, r)
+        if (!parcial.exists() || parcial.length() == 0L) {
+            parcial.delete()
+            return false
+        }
+        if (destino.exists()) destino.delete()
+        if (!parcial.renameTo(destino)) {
+            parcial.delete()
+            return false
+        }
+        val nombre = Uri.parse(url).lastPathSegment?.substringBeforeLast('.')
+            ?.takeIf { it.isNotBlank() } ?: r.etiqueta
+        DataMeter.prefs(ctx).edit().putString("medio.${r.id}.nombre", nombre).apply()
+        return true
+    }
+
+    data class Progreso(val estado: Int, val bajados: Long, val total: Long) {
+        val porcentaje: Int get() = if (total > 0) ((bajados * 100) / total).toInt() else 0
+        val listo: Boolean get() = estado == DownloadManager.STATUS_SUCCESSFUL
+        val fallo: Boolean get() = estado == DownloadManager.STATUS_FAILED
+    }
+
+    fun progreso(ctx: Context, id: Long): Progreso? {
+        val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        var c: Cursor? = null
+        try {
+            c = dm.query(DownloadManager.Query().setFilterById(id)) ?: return null
+            if (!c.moveToFirst()) return null
+            return Progreso(
+                estado = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)),
+                bajados = c.getLong(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                ),
+                total = c.getLong(
+                    c.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                )
+            )
+        } catch (e: Exception) {
+            return null
+        } finally {
+            c?.close()
+        }
+    }
+
+    fun cancelar(ctx: Context, id: Long) {
+        try {
+            val dm = ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            dm.remove(id)
+        } catch (e: Exception) {
+            // si no se puede quitar, el .parcial se sobrescribe al reintentar
         }
     }
 

@@ -17,10 +17,13 @@ import android.os.Handler
 import android.os.Looper
 import android.text.format.DateFormat
 import android.text.format.Formatter
+import android.text.InputType
 import android.view.View
 import android.view.animation.AccelerateDecelerateInterpolator
+import android.widget.EditText
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.ColorUtils
@@ -49,6 +52,10 @@ class MainActivity : AppCompatActivity() {
     private val copiando = HashMap<String, Int>()
     private val fallos = HashSet<String>()
     private var ranuraPendiente: Ranura? = null
+
+    /** Descargas por URL en curso: id de ranura -> id de DownloadManager. */
+    private val descargas = HashMap<String, Long>()
+    private val urls = HashMap<String, String>()
 
     /**
      * Selector del sistema. Se registra aqui (no en onCreate) porque tiene que
@@ -92,6 +99,7 @@ class MainActivity : AppCompatActivity() {
             paintClock()
             paintData()
             pollDownload()
+            pollMedios()
             handler.postDelayed(this, 1_000)
         }
     }
@@ -459,6 +467,7 @@ class MainActivity : AppCompatActivity() {
                 ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_accent))
             row.rowRoot.setOnClickListener { pulsarMedio(r) }
             row.btnDelete.setOnClickListener { borrarMedio(r) }
+            row.btnUrl.setOnClickListener { pedirUrl(r) }
             b.containerMedia.addView(row.root)
             mediaRows[r.id] = row
         }
@@ -555,10 +564,75 @@ class MainActivity : AppCompatActivity() {
         renderMedios()
     }
 
+    /** Pide un enlace y se lo baja. El enlace lo pone el usuario, no la app. */
+    private fun pedirUrl(r: Ranura) {
+        if (copiando.containsKey(r.id) || descargas.containsKey(r.id)) return
+
+        val campo = EditText(this).apply {
+            hint = getString(R.string.media_url_hint)
+            inputType = InputType.TYPE_TEXT_VARIATION_URI
+            setSingleLine()
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.media_url_title)
+            .setMessage(R.string.media_url_help)
+            .setView(campo)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.ok) { _, _ ->
+                val url = campo.text.toString().trim()
+                // solo https: Android bloquea el trafico sin cifrar desde
+                // targetSdk 28, asi que un http:// fallaria sin explicacion
+                if (!url.startsWith("https://")) {
+                    Toast.makeText(this, R.string.media_url_bad, Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+                try {
+                    descargas[r.id] = Medios.descargar(this, r, url)
+                    urls[r.id] = url
+                    fallos.remove(r.id)
+                } catch (e: Exception) {
+                    fallos.add(r.id)
+                }
+                renderMedios()
+            }
+            .show()
+    }
+
+    private fun pollMedios() {
+        if (descargas.isEmpty()) return
+        val terminadas = mutableListOf<String>()
+
+        for ((id, dlId) in descargas) {
+            val r = Medios.porId(id) ?: continue
+            val row = mediaRows[id] ?: continue
+            val p = Medios.progreso(this, dlId)
+            when {
+                p == null || p.fallo -> {
+                    Medios.cancelar(this, dlId)
+                    fallos.add(id)
+                    terminadas += id
+                }
+
+                p.listo -> {
+                    if (!Medios.finalizarDescarga(this, r, urls[id].orEmpty())) fallos.add(id)
+                    terminadas += id
+                }
+
+                else -> row.pb.progress = p.porcentaje
+            }
+        }
+
+        terminadas.forEach { descargas.remove(it); urls.remove(it) }
+        renderMedios()
+    }
+
     private fun renderMedios() {
         for (r in Medios.ranuras) {
             val row = mediaRows[r.id] ?: continue
-            val pct = copiando[r.id]
+            val bajando = descargas.containsKey(r.id)
+            val pct = copiando[r.id] ?: if (bajando) row.pb.progress else null
             val guardado = Medios.guardado(this, r)
             val suena = sonando(r)
 
@@ -576,9 +650,11 @@ class MainActivity : AppCompatActivity() {
             row.eq.visibility = if (suena) View.VISIBLE else View.GONE
             if (suena) eqArrancar(r.id, r.accent, barras) else eqParar(r.id, barras)
 
-            row.pb.visibility = if (pct != null) View.VISIBLE else View.GONE
-            if (pct != null) row.pb.progress = pct
-            row.btnDelete.visibility = if (guardado && pct == null) View.VISIBLE else View.GONE
+            val ocupada = pct != null
+            row.pb.visibility = if (ocupada) View.VISIBLE else View.GONE
+            if (copiando[r.id] != null) row.pb.progress = pct!!
+            row.btnDelete.visibility = if (guardado && !ocupada) View.VISIBLE else View.GONE
+            row.btnUrl.visibility = if (!guardado && !ocupada) View.VISIBLE else View.GONE
 
             row.tvSub.text = if (guardado) {
                 r.etiqueta + " · " + Formatter.formatShortFileSize(this, Medios.tamano(this, r))
@@ -587,6 +663,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             row.tvEstado.text = when {
+                bajando && pct != null -> getString(R.string.media_downloading, pct)
                 pct != null -> getString(R.string.media_copying, pct)
                 fallos.contains(r.id) -> getString(R.string.media_failed)
                 suena -> getString(R.string.media_playing)
