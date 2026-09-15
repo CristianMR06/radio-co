@@ -50,7 +50,8 @@ class MainActivity : AppCompatActivity() {
 
     /** Copias en curso: id de la ranura -> porcentaje. */
     private val copiando = HashMap<String, Int>()
-    private val fallos = HashSet<String>()
+    /** Ranura -> texto del fallo, para poder explicar cual fue. */
+    private val fallos = HashMap<String, String>()
     private var ranuraPendiente: Ranura? = null
 
     /** Descargas por URL en curso: id de ranura -> id de DownloadManager. */
@@ -496,7 +497,7 @@ class MainActivity : AppCompatActivity() {
                 selector.launch(r.mimes)
             } catch (e: Exception) {
                 ranuraPendiente = null
-                fallos.add(r.id)
+                fallos[r.id] = getString(R.string.media_failed)
                 renderMedios()
             }
             return
@@ -543,13 +544,13 @@ class MainActivity : AppCompatActivity() {
                 handler.post {
                     if (isFinishing || isDestroyed) return@post
                     copiando.remove(r.id)
-                    if (!ok) fallos.add(r.id)
+                    if (!ok) fallos[r.id] = getString(R.string.media_failed)
                     renderMedios()
                 }
             }
         } catch (e: Exception) {
             copiando.remove(r.id)
-            fallos.add(r.id)
+            fallos[r.id] = getString(R.string.media_failed)
             renderMedios()
         }
     }
@@ -593,7 +594,7 @@ class MainActivity : AppCompatActivity() {
                     urls[r.id] = url
                     fallos.remove(r.id)
                 } catch (e: Exception) {
-                    fallos.add(r.id)
+                    fallos[r.id] = getString(R.string.media_failed)
                 }
                 renderMedios()
             }
@@ -611,12 +612,22 @@ class MainActivity : AppCompatActivity() {
             when {
                 p == null || p.fallo -> {
                     Medios.cancelar(this, dlId)
-                    fallos.add(id)
+                    fallos[id] = getString(R.string.media_failed)
                     terminadas += id
                 }
 
                 p.listo -> {
-                    if (!Medios.finalizarDescarga(this, r, urls[id].orEmpty())) fallos.add(id)
+                    when (Medios.finalizarDescarga(this, r, urls[id].orEmpty())) {
+                        Medios.Fallo.NINGUNO -> fallos.remove(id)
+                        Medios.Fallo.ES_UNA_PAGINA ->
+                            fallos[id] = getString(R.string.media_failed_html)
+
+                        Medios.Fallo.VACIO ->
+                            fallos[id] = getString(R.string.media_failed_empty)
+
+                        Medios.Fallo.NO_SE_PUDO_GUARDAR ->
+                            fallos[id] = getString(R.string.media_failed)
+                    }
                     terminadas += id
                 }
 
@@ -665,7 +676,7 @@ class MainActivity : AppCompatActivity() {
             row.tvEstado.text = when {
                 bajando && pct != null -> getString(R.string.media_downloading, pct)
                 pct != null -> getString(R.string.media_copying, pct)
-                fallos.contains(r.id) -> getString(R.string.media_failed)
+                fallos.containsKey(r.id) -> fallos[r.id].orEmpty()
                 suena -> getString(R.string.media_playing)
                 guardado -> getString(R.string.media_saved)
                 else -> getString(R.string.media_pick)

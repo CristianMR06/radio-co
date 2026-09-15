@@ -172,23 +172,61 @@ object Medios {
         return dm.enqueue(req)
     }
 
-    /** Pasa el .parcial a su sitio. Igual que al importar: nada a medias. */
-    fun finalizarDescarga(ctx: Context, r: Ranura, url: String): Boolean {
+    /** Por que no se pudo dejar el archivo en su sitio. */
+    enum class Fallo { NINGUNO, VACIO, ES_UNA_PAGINA, NO_SE_PUDO_GUARDAR }
+
+    /**
+     * Pasa el .parcial a su sitio. Igual que al importar: nada a medias.
+     *
+     * Antes comprueba que lo descargado sea de verdad un archivo. Los enlaces
+     * de "compartir" de Drive, Dropbox y compania devuelven una pagina web, no
+     * el fichero; sin esta comprobacion se guardaria el HTML como si fuera el
+     * medio y el fallo saldria mucho despues, al darle al play, sin explicacion.
+     */
+    fun finalizarDescarga(ctx: Context, r: Ranura, url: String): Fallo {
         val parcial = File(carpeta(ctx), "${r.id}.parcial")
         val destino = fichero(ctx, r)
         if (!parcial.exists() || parcial.length() == 0L) {
             parcial.delete()
-            return false
+            return Fallo.VACIO
+        }
+        if (pareceUnaPagina(parcial)) {
+            parcial.delete()
+            return Fallo.ES_UNA_PAGINA
         }
         if (destino.exists()) destino.delete()
         if (!parcial.renameTo(destino)) {
             parcial.delete()
-            return false
+            return Fallo.NO_SE_PUDO_GUARDAR
         }
         val nombre = Uri.parse(url).lastPathSegment?.substringBeforeLast('.')
             ?.takeIf { it.isNotBlank() } ?: r.etiqueta
         DataMeter.prefs(ctx).edit().putString("medio.${r.id}.nombre", nombre).apply()
-        return true
+        return Fallo.NINGUNO
+    }
+
+    /** Mira los primeros bytes: si empiezan como HTML, no es un medio. */
+    private fun pareceUnaPagina(f: File): Boolean {
+        return try {
+            val bruto = f.inputStream().use { entrada ->
+                val buf = ByteArray(256)
+                val n = entrada.read(buf)
+                if (n <= 0) return false
+                // ISO-8859-1: aqui solo interesan los primeros bytes tal cual
+                String(buf, 0, n, Charsets.ISO_8859_1)
+            }
+
+            // salta espacios y un posible BOM antes de mirar la etiqueta
+            val cabecera = bruto
+                .dropWhile { it.isWhitespace() || it.code > 127 }
+                .lowercase()
+
+            cabecera.startsWith("<!doctype html") ||
+                cabecera.startsWith("<html") ||
+                cabecera.startsWith("<head")
+        } catch (e: Exception) {
+            false
+        }
     }
 
     data class Progreso(val estado: Int, val bajados: Long, val total: Long) {

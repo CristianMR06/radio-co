@@ -16,6 +16,8 @@
     <string name="media_copying">Copiando… %1$d%%</string>
     <string name="media_saved">En el móvil · no gasta datos</string>
     <string name="media_failed">No se pudo copiar el archivo</string>
+    <string name="media_failed_html">Ese enlace devuelve una página web, no el archivo. Necesitas el enlace de descarga directa.</string>
+    <string name="media_failed_empty">La descarga llegó vacía</string>
     <string name="media_delete">borrar copia</string>
     <string name="media_deleted">Copia borrada del móvil</string>
     <string name="media_playing">Sonando</string>
