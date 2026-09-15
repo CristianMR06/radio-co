@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.ActivityNotFoundException
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -576,6 +577,13 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(20), dp(12), dp(20), dp(12))
         }
 
+        // Si acabas de copiar un enlace, ya te lo pone: teclear una URL larga
+        // en el movil es justo lo que nadie quiere hacer.
+        portapapeles()?.let {
+            campo.setText(it)
+            campo.setSelection(it.length)
+        }
+
         AlertDialog.Builder(this)
             .setTitle(R.string.media_url_title)
             .setMessage(R.string.media_url_help)
@@ -599,6 +607,17 @@ class MainActivity : AppCompatActivity() {
                 renderMedios()
             }
             .show()
+    }
+
+    /** El enlace copiado, si lo hay y tiene pinta de servir. */
+    private fun portapapeles(): String? {
+        return try {
+            val cb = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            val texto = cb.primaryClip?.getItemAt(0)?.coerceToText(this)?.toString()?.trim()
+            texto?.takeIf { it.startsWith("https://") && it.length < 2000 }
+        } catch (e: Exception) {
+            null   // desde Android 10 solo se puede leer con la app en primer
+        }          // plano; si no se puede, simplemente no se rellena
     }
 
     private fun pollMedios() {

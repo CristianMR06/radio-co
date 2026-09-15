@@ -8,7 +8,7 @@
     <string name="media_or_url">o pegar un enlace</string>
     <string name="media_url_title">Enlace al archivo</string>
     <string name="media_url_hint">https://…</string>
-    <string name="media_url_help">Tiene que ser un enlace directo al archivo y empezar por https. Se descarga una vez y se queda en el móvil.</string>
+    <string name="media_url_help">Tiene que ser un enlace directo al archivo y empezar por https. Si lo tienes copiado, ya te lo pongo. Se descarga una vez y se queda en el móvil.</string>
     <string name="media_url_bad">Ese enlace no vale: tiene que empezar por https:// (Android bloquea las descargas sin cifrar)</string>
     <string name="media_downloading">Descargando… %1$d%%</string>
     <string name="ok">Descargar</string>
