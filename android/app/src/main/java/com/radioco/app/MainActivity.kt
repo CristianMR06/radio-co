@@ -35,6 +35,7 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import com.google.common.util.concurrent.MoreExecutors
 import com.radioco.app.databinding.ActivityMainBinding
+import com.radioco.app.databinding.ItemMatchBinding
 import com.radioco.app.databinding.ItemMediaBinding
 import com.radioco.app.databinding.ItemStationBinding
 import java.text.SimpleDateFormat
@@ -48,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var b: ActivityMainBinding
     private val rows = LinkedHashMap<String, ItemStationBinding>()
     private val mediaRows = LinkedHashMap<String, ItemMediaBinding>()
+    private val matchRows = LinkedHashMap<String, ItemMatchBinding>()
 
     /** Copias en curso: id de la ranura -> porcentaje. */
     private val copiando = HashMap<String, Int>()
@@ -113,6 +115,7 @@ class MainActivity : AppCompatActivity() {
 
         buildRows()
         buildMediaRows()
+        buildMatchRows()
 
         b.btnReset.setOnClickListener {
             DataMeter.reset(this)
@@ -166,6 +169,7 @@ class MainActivity : AppCompatActivity() {
             render()
         }, MoreExecutors.directExecutor())
         handler.post(tick)
+        cargarPartidos()
     }
 
     override fun onResume() {
@@ -457,6 +461,76 @@ class MainActivity : AppCompatActivity() {
         }
 
         renderMedios()
+    }
+
+    // --------------------------------------------------------------- partidos
+
+    private fun buildMatchRows() {
+        for (eq in Partidos.equipos) {
+            val row = ItemMatchBinding.inflate(layoutInflater, b.containerMatches, false)
+            row.tvTeam.text = eq.nombre
+            row.tvShort.text = eq.corto
+            row.iconBg.backgroundTintList = ColorStateList.valueOf(eq.accent)
+            row.tvLast.text = getString(R.string.match_loading)
+            row.tvNext.text = ""
+            b.containerMatches.addView(row.root)
+            matchRows[eq.id] = row
+            // lo que ya se sabía se pinta al instante; la red viene después
+            Partidos.leerCache(this, eq)?.let { pintarPartidos(eq, it) }
+        }
+    }
+
+    /**
+     * Va al hilo de siempre. Partidos.consultar() decide solo si hace falta
+     * preguntar o le vale con lo guardado, así que llamar aquí cada vez que se
+     * abre la pantalla no gasta datos de más.
+     */
+    private fun cargarPartidos() {
+        for (eq in Partidos.equipos) {
+            io.execute {
+                val ficha = try {
+                    Partidos.consultar(this, eq)
+                } catch (e: Exception) {
+                    null
+                }
+                if (ficha != null) handler.post { pintarPartidos(eq, ficha) }
+            }
+        }
+    }
+
+    private fun pintarPartidos(eq: Partidos.Equipo, f: Partidos.Ficha) {
+        val row = matchRows[eq.id] ?: return
+        if (f.vacia) {
+            row.tvLast.text = getString(R.string.match_none)
+            row.tvNext.text = ""
+            return
+        }
+        row.tvLast.text = f.ultimo?.let { jugado(eq, it) }
+            ?: (getString(R.string.match_last) + " · " + getString(R.string.match_no_last))
+        row.tvNext.text = f.proximo?.let { porJugar(eq, it) }
+            ?: (getString(R.string.match_next) + " · " + getString(R.string.match_no_next))
+    }
+
+    /** "Último · Real Madrid 4 - 1 Rayo Vallecano" + la linea de detalles. */
+    private fun jugado(eq: Partidos.Equipo, p: Partidos.Partido): String {
+        val marcador = p.marcador ?: "-"
+        val primera = getString(R.string.match_last) + " · " +
+            eq.nombre + "  " + marcador + "  " + p.rival
+        return primera + "\n" + detalles(p)
+    }
+
+    private fun porJugar(eq: Partidos.Equipo, p: Partidos.Partido): String {
+        val primera = getString(R.string.match_next) + " · " + eq.nombre + " vs " + p.rival
+        return primera + "\n" + detalles(p)
+    }
+
+    private fun detalles(p: Partidos.Partido): String {
+        val trozos = ArrayList<String>()
+        Partidos.cuandoTexto(this, p).takeIf { it.isNotBlank() }?.let { trozos.add(it) }
+        trozos.add(getString(if (p.enCasa) R.string.match_home else R.string.match_away))
+        if (p.torneo.isNotBlank()) trozos.add(Partidos.torneoCorto(p.torneo))
+        if (p.aplazado) trozos.add(getString(R.string.match_postponed))
+        return trozos.joinToString(" · ")
     }
 
     // --------------------------------------------------------------- medios

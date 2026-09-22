@@ -93,6 +93,19 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:14p
 .pill:hover{background:#2b3644}
 .pill svg{width:18px;height:18px;fill:var(--accent);display:block}
 
+/* ---- partidos ---- */
+#matches{display:flex;flex-direction:column;gap:12px}
+.mcard{background:var(--card);border-radius:24px;padding:18px}
+.mtop{display:flex;align-items:center;gap:14px}
+.mbadge{
+  flex:none;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;
+  background:var(--accent);color:#08111a;font-weight:700;font-size:15px;
+}
+.mname{font-weight:700;font-size:18px;letter-spacing:-.02em}
+.mline{color:var(--dim);font-size:13px;line-height:1.45;margin-top:14px}
+.mline+.mline{margin-top:6px}
+.mline b{color:var(--txt);font-weight:700}
+
 /* ---- letra / karaoke ---- */
 #lyr{background:var(--card);border-radius:24px;padding:18px;margin-top:12px;
      display:flex;flex-direction:column;gap:12px}
@@ -162,6 +175,9 @@ header{display:flex;align-items:flex-start;justify-content:space-between;gap:14p
       <span class="hint">Si la letra va adelantada, resta segundos. Si va atrasada, suma.</span>
     </div>
   </div>
+
+  <div class="label">Partidos</div>
+  <div id="matches"></div>
 
 </div>
 
@@ -797,6 +813,144 @@ document.addEventListener("keydown", function (e) {
     if (current) stop(); else play(lastStation);
   }
 });
+
+/* ---------- partidos: el ultimo y el siguiente de cada equipo ----------
+   Los datos son de TheSportsDB (clave publica "3", con CORS abierto). Se
+   guardan en el navegador y solo se vuelve a preguntar cada tres horas: son
+   unos pocos KB, pero el sentido de esta pagina es no gastar de mas. */
+var EQUIPOS = [
+  { id: "madrid", sdb: "133738", nombre: "Real Madrid", corto: "RM", accent: "#dce3ea" },
+  { id: "tolima", sdb: "137609", nombre: "Deportes Tolima", corto: "DT", accent: "#f0b429" }
+];
+var SDB = "https://www.thesportsdb.com/api/v1/json/3";
+var VIGENCIA_MS = 3 * 60 * 60 * 1000;
+
+function torneoCorto(n) {
+  if (!n) return "";
+  var t = n.toLowerCase();
+  if (t.indexOf("la liga") >= 0) return "LaLiga";
+  if (t.indexOf("primera a") >= 0 || t.indexOf("dimayor") >= 0) return "Primera A";
+  if (t.indexOf("champions") >= 0) return "Champions";
+  if (t.indexOf("libertadores") >= 0) return "Libertadores";
+  if (t.indexOf("sudamericana") >= 0) return "Sudamericana";
+  if (t.indexOf("copa del rey") >= 0) return "Copa del Rey";
+  if (t.indexOf("copa colombia") >= 0) return "Copa Colombia";
+  if (t.indexOf("supercopa") >= 0) return "Supercopa";
+  if (t.indexOf("friendl") >= 0) return "Amistoso";
+  return n;
+}
+
+/* strTimestamp viene en UTC; el navegador lo pasa a la hora de aqui */
+function momentoPartido(e) {
+  if (e.strTimestamp) {
+    var d = new Date(e.strTimestamp.replace(" ", "T") + "Z");
+    if (!isNaN(d.getTime())) return d.getTime();
+  }
+  if (e.dateEvent) {
+    var d2 = new Date(e.dateEvent + "T" + (e.strTime || "00:00:00").slice(0, 8) + "Z");
+    if (!isNaN(d2.getTime())) return d2.getTime();
+  }
+  return 0;
+}
+
+function dePartido(e, eq) {
+  if (!e) return null;
+  var casa = e.idHomeTeam === eq.sdb;
+  var rival = casa ? e.strAwayTeam : e.strHomeTeam;
+  if (!rival) return null;
+  var gc = parseInt(e.intHomeScore, 10), gf = parseInt(e.intAwayScore, 10);
+  var marcador = null;
+  if (!isNaN(gc) && !isNaN(gf)) marcador = casa ? gc + " - " + gf : gf + " - " + gc;
+  return {
+    rival: rival, casa: casa, marcador: marcador,
+    cuando: momentoPartido(e), torneo: e.strLeague || "",
+    aplazado: (e.strPostponed || "").toLowerCase() === "yes"
+  };
+}
+
+function cuandoTexto(p) {
+  if (!p.cuando) return "";
+  var d = new Date(p.cuando);
+  var fecha = d.toLocaleDateString("es", { weekday: "short", day: "numeric", month: "short" });
+  var hora = d.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  return fecha + " · " + hora;
+}
+
+function detallesPartido(p) {
+  var t = [];
+  var c = cuandoTexto(p); if (c) t.push(c);
+  t.push(p.casa ? "en casa" : "fuera");
+  if (p.torneo) t.push(torneoCorto(p.torneo));
+  if (p.aplazado) t.push("aplazado");
+  return t.join(" · ");
+}
+
+function esc(x) {
+  return String(x).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function pintarPartidos(eq, ficha) {
+  var el = document.getElementById("m-" + eq.id);
+  if (!el) return;
+  var html = "";
+  if (ficha.ultimo) {
+    html += '<div class="mline"><b>Último</b> · ' + esc(eq.nombre) + "  " +
+      esc(ficha.ultimo.marcador || "-") + "  " + esc(ficha.ultimo.rival) +
+      "<br>" + esc(detallesPartido(ficha.ultimo)) + "</div>";
+  }
+  if (ficha.proximo) {
+    html += '<div class="mline"><b>Próximo</b> · ' + esc(eq.nombre) + " vs " +
+      esc(ficha.proximo.rival) + "<br>" + esc(detallesPartido(ficha.proximo)) + "</div>";
+  }
+  if (!html) html = '<div class="mline">Todavía no sé nada de este equipo</div>';
+  el.innerHTML = html;
+}
+
+function cacheDe(eq) {
+  try { return JSON.parse(localStorage.getItem("partidos." + eq.id) || "null"); }
+  catch (e) { return null; }
+}
+
+function vigente(f) {
+  if (!f || !f.t) return false;
+  if (Date.now() - f.t > VIGENCIA_MS) return false;
+  if (!f.proximo || !f.proximo.cuando) return true;
+  return Date.now() < f.proximo.cuando + 2 * 60 * 60 * 1000;
+}
+
+function cargarPartidos() {
+  EQUIPOS.forEach(function (eq) {
+    var guardada = cacheDe(eq);
+    if (guardada) pintarPartidos(eq, guardada);
+    if (vigente(guardada)) return;
+
+    var uno = fetch(SDB + "/eventslast.php?id=" + eq.sdb).then(function (r) { return r.json(); });
+    var dos = fetch(SDB + "/eventsnext.php?id=" + eq.sdb).then(function (r) { return r.json(); });
+    Promise.all([uno, dos]).then(function (res) {
+      var u = res[0] && res[0].results ? dePartido(res[0].results[0], eq) : null;
+      var p = res[1] && res[1].events ? dePartido(res[1].events[0], eq) : null;
+      if (!u && !p) return;                       // sin datos, se queda lo de antes
+      var ficha = { ultimo: u, proximo: p, t: Date.now() };
+      try { localStorage.setItem("partidos." + eq.id, JSON.stringify(ficha)); } catch (e) {}
+      pintarPartidos(eq, ficha);
+    }).catch(function () {});
+  });
+}
+
+(function montarPartidos() {
+  var cont = document.getElementById("matches");
+  EQUIPOS.forEach(function (eq) {
+    var card = document.createElement("div");
+    card.className = "mcard";
+    card.style.setProperty("--accent", eq.accent);
+    card.innerHTML =
+      '<div class="mtop"><div class="mbadge">' + esc(eq.corto) + "</div>" +
+      '<div class="mname">' + esc(eq.nombre) + "</div></div>" +
+      '<div id="m-' + eq.id + '"><div class="mline">Buscando los partidos…</div></div>';
+    cont.appendChild(card);
+  });
+  cargarPartidos();
+})();
 
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("sw.js").catch(function () {});

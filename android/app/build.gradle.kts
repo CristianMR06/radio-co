@@ -24,8 +24,8 @@ android {
 
         // OJO: la etiqueta de la release en GitHub tiene que ser "v<versionCode>"
         // (v2, v3, ...). Es lo que la app compara para saber si hay novedad.
-        versionCode = 11
-        versionName = "2.0"
+        versionCode = 12
+        versionName = "2.1"
 
         buildConfigField("String", "GITHUB_REPO", "\"CristianMR06/radio-co\"")
     }

@@ -165,6 +165,42 @@ Detalles de implementación:
   les toca.
 - La copia se escribe a un `.parcial` y solo se renombra al terminar, para que
   un fallo a medias no deje un fichero roto con pinta de bueno.
+- La pantalla del vídeo **esconde los botones de "anterior" y "siguiente"**. Con
+  un solo medio, "anterior" no va a otra pista: salta al segundo 0, que es justo
+  lo contrario de lo que se busca al rebobinar. Quedan retroceder 10 s y avanzar
+  30 s, más una flecha de volver que aparece con el resto de controles.
+- Se guarda por dónde ibas (`medio.<id>.posicion`), porque el reproductor se
+  suelta al salir de la pantalla y si no el vídeo empezaba de cero cada vez.
+- La franja de abajo está en `systemGestureExclusionRects`: sin eso, arrastrar
+  la barra desde cerca del borde izquierdo lo entiende Android como el gesto de
+  "atrás" y cierra la pantalla.
+
+### Partidos (Real Madrid y Deportes Tolima)
+
+En la pantalla principal, debajo de los medios, van los dos equipos con **el
+último partido y su resultado** y **el siguiente con su hora**.
+
+Los datos salen de **TheSportsDB** (`thesportsdb.com`), que tiene tanto LaLiga
+como la liga colombiana y deja consultar sin registrarse: la clave `3` es la
+pública de pruebas. Cada consulta devuelve un partido, que es justo lo que hace
+falta. Los identificadores de los equipos están fijos en `Partidos.kt`:
+Real Madrid `133738`, Deportes Tolima `137609`.
+
+Detalles que importan:
+
+- **La hora es la del móvil.** La API da el comienzo en UTC (`strTimestamp`) y
+  cada dispositivo lo pinta en su huso, así que el mismo partido sale a las
+  20:10 en Colombia y a las 01:10 en España.
+- **Se guarda lo último que se supo** y solo se vuelve a preguntar cada 3 horas,
+  o antes si el próximo partido ya debería haber terminado. Son unos pocos KB,
+  pero esta app existe para no gastar datos porque sí.
+- Si la red falla se deja lo que ya había: mejor un dato de ayer que un hueco.
+- Sin escudos: una imagen por equipo son datos cada vez que se abre la app.
+- Los nombres de competición vienen en inglés y muy largos
+  (`Colombia Categoría Primera A`), así que se acortan al pintarlos.
+
+La web hace exactamente lo mismo; la API permite CORS, así que el navegador
+puede consultarla directamente.
 
 ### Publicar el repositorio (una sola vez)
 

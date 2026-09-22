@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo del boton de volver del video: un circulo oscuro para que la flecha
+     se vea igual sobre una escena clara que sobre una oscura. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="#99000000" />
+</shape>
