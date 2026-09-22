@@ -128,26 +128,6 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
-        <!-- partidos: los dos equipos de siempre, el ultimo y el siguiente -->
-        <TextView
-            android:id="@+id/lblMatches"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
-            android:layout_marginBottom="12dp"
-            android:letterSpacing="0.12"
-            android:text="@string/matches_label"
-            android:textAllCaps="true"
-            android:textColor="@color/dim2"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <LinearLayout
-            android:id="@+id/containerMatches"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical" />
-
         <!-- un poco mas de peso abajo: el bloque queda algo por encima del
              centro optico, que se lee mejor que justo en el medio -->
         <View

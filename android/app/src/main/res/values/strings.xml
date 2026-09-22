@@ -60,15 +60,5 @@
     <string name="sync_hint_auto">Esta emisora se sincroniza sola. Ajústalo solo si hace falta.</string>
     <string name="sync_hint_manual">Si la letra va adelantada, resta segundos. Si va atrasada, suma.</string>
 
-    <string name="matches_label">Partidos</string>
-    <string name="match_last">Último</string>
-    <string name="match_next">Próximo</string>
-    <string name="match_home">en casa</string>
-    <string name="match_away">fuera</string>
-    <string name="match_postponed">aplazado</string>
-    <string name="match_loading">Buscando los partidos…</string>
-    <string name="match_none">Todavía no sé nada de este equipo</string>
-    <string name="match_no_next">Sin próximo partido anunciado</string>
-    <string name="match_no_last">Sin partido jugado todavía</string>
 
 </resources>

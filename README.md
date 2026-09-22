@@ -125,13 +125,19 @@ los resultados. Aun así, un título mal escrito en origen no se encuentra.
 emisora, no en el tuyo: tú oyes el audio entre 10 y 30 segundos más tarde por el
 buffer del reproductor y del CDN. Hay dos casos:
 
-- **La Mega se sincroniza sola.** Su título viaja *dentro* del stream (ICY), así
-  que el momento en que ExoPlayer lo lee corresponde al inicio de la canción en
-  el audio. Como el reproductor va por delante de lo que suena, y sabe cuánto
-  (`totalBufferedDuration`), el desfase se calcula sin intervención.
-- **Olímpica necesita un ajuste manual.** No manda nada en banda, así que se
-  parte de una latencia estimada de 20 s y hay botones de ±1 s. El ajuste se
-  guarda por emisora.
+- **Con título en banda (ICY) se sincroniza solo.** media3 marca el bloque ICY
+  con el instante del final de lo bufereado y el `MetadataRenderer` lo entrega
+  cuando la reproducción llega ahí: `onMetadata` salta justo cuando empieza a
+  oírse la canción, así que el ancla es `currentPosition` **a secas**. Sumarle
+  `totalBufferedDuration` (que es lo que se hacía al principio) adelantaba el
+  ancla unos 30 s: no se resaltaba nada al empezar cada canción y después iba
+  atrasado, y los botones de ±1 s parecían no hacer nada.
+- **Sin título en banda hay que estimar.** Se parte de una latencia de 20 s y
+  hay botones de ±1 s; el ajuste se guarda por emisora.
+- Las dos emisoras mandan ICY (Olímpica también, aunque su reproductor web use
+  la API de Triton). Cuando el stream da el título, **Triton se aparta**: si se
+  mezclan, el sincronismo cambia de base de una canción a otra y el ajuste
+  manual deja de cuadrar.
 
 Si la radio rebuferea, el karaoke se descuadra hasta la siguiente canción.
 
@@ -174,33 +180,6 @@ Detalles de implementación:
 - La franja de abajo está en `systemGestureExclusionRects`: sin eso, arrastrar
   la barra desde cerca del borde izquierdo lo entiende Android como el gesto de
   "atrás" y cierra la pantalla.
-
-### Partidos (Real Madrid y Deportes Tolima)
-
-En la pantalla principal, debajo de los medios, van los dos equipos con **el
-último partido y su resultado** y **el siguiente con su hora**.
-
-Los datos salen de **TheSportsDB** (`thesportsdb.com`), que tiene tanto LaLiga
-como la liga colombiana y deja consultar sin registrarse: la clave `3` es la
-pública de pruebas. Cada consulta devuelve un partido, que es justo lo que hace
-falta. Los identificadores de los equipos están fijos en `Partidos.kt`:
-Real Madrid `133738`, Deportes Tolima `137609`.
-
-Detalles que importan:
-
-- **La hora es la del móvil.** La API da el comienzo en UTC (`strTimestamp`) y
-  cada dispositivo lo pinta en su huso, así que el mismo partido sale a las
-  20:10 en Colombia y a las 01:10 en España.
-- **Se guarda lo último que se supo** y solo se vuelve a preguntar cada 3 horas,
-  o antes si el próximo partido ya debería haber terminado. Son unos pocos KB,
-  pero esta app existe para no gastar datos porque sí.
-- Si la red falla se deja lo que ya había: mejor un dato de ayer que un hueco.
-- Sin escudos: una imagen por equipo son datos cada vez que se abre la app.
-- Los nombres de competición vienen en inglés y muy largos
-  (`Colombia Categoría Primera A`), así que se acortan al pintarlos.
-
-La web hace exactamente lo mismo; la API permite CORS, así que el navegador
-puede consultarla directamente.
 
 ### Publicar el repositorio (una sola vez)
 

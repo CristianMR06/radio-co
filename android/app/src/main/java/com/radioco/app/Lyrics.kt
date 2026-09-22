@@ -1,5 +1,6 @@
 package com.radioco.app
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.IOException
@@ -14,6 +15,20 @@ import java.util.Locale
  * el modo karaoke. Si solo hay letra plana, se muestra sin resaltar.
  */
 object Lyrics {
+
+    /**
+     * El ancla del sincronismo por ICY cambio en la 2.2: antes se le sumaba el
+     * buffer del reproductor, unos 30 s de mas. Cualquier ajuste guardado
+     * estaba compensando ese fallo, asi que ahora sobra y descuadraria la letra
+     * en sentido contrario. Se borran una sola vez.
+     */
+    fun limpiarAjustesViejos(ctx: Context) {
+        val prefs = DataMeter.prefs(ctx)
+        if (prefs.getBoolean("ajusteLimpio22", false)) return
+        val e = prefs.edit()
+        for (k in prefs.all.keys) if (k.startsWith("lyricsOffset.")) e.remove(k)
+        e.putBoolean("ajusteLimpio22", true).apply()
+    }
 
     private const val BUSCAR = "https://lrclib.net/api/search?"
     private const val TIMEOUT_MS = 12_000

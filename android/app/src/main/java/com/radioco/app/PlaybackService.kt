@@ -44,6 +44,14 @@ class PlaybackService : MediaSessionService() {
     private val io = Executors.newSingleThreadExecutor()
     private var tritonPending: Runnable? = null
 
+    /**
+     * Si la emisora manda el titulo dentro del stream, ese dato gana: llega
+     * justo cuando empieza a sonar la cancion, sin estimar nada. Olimpica hace
+     * las dos cosas, y mezclarlas hacia que el sincronismo cambiara de base de
+     * una cancion a otra y el ajuste manual dejara de cuadrar.
+     */
+    private var icyFiable = false
+
     /** Mide los datos gastados mientras suena. */
     private val meterTick = object : Runnable {
         override fun run() {
@@ -148,13 +156,18 @@ class PlaybackService : MediaSessionService() {
                     val texto = NowPlaying.deIcy(entrada.title) ?: return
                     val (artista, titulo) = NowPlaying.deIcyPartes(entrada.title)
                     val p = session?.player
-                    // el metadato se lee por delante de lo que suena: justo lo
-                    // que hay en el buffer. Ahi empieza a oirse esta cancion.
-                    val ancla = if (p != null) {
-                        p.currentPosition + p.totalBufferedDuration
-                    } else {
-                        0L
-                    }
+                    // OJO: aqui NO hay que sumar el buffer. media3 marca el
+                    // bloque ICY con el instante del final de lo bufereado
+                    // (ProgressiveMediaPeriod.onIcyMetadata usa el mayor sello
+                    // encolado) y el MetadataRenderer lo suelta cuando la
+                    // reproduccion llega ahi. O sea, esto salta justo cuando
+                    // empieza a sonar la cancion. Sumar totalBufferedDuration
+                    // adelantaba el ancla unos 30 s: el karaoke no resaltaba
+                    // nada al principio de cada cancion y luego iba atrasado,
+                    // y los botones de +-1 s parecian no hacer nada porque
+                    // habria hecho falta pulsarlos treinta veces.
+                    val ancla = p?.currentPosition ?: 0L
+                    icyFiable = true
                     setSong(texto, artista, titulo, anclaPlayer = ancla)
                     return
                 }
@@ -163,6 +176,7 @@ class PlaybackService : MediaSessionService() {
 
         override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
             song = null
+            icyFiable = false
             limpiarSync()
             if (Stations.parseStation(mediaItem?.mediaId)?.tritonMount != null) {
                 startTriton()
@@ -291,6 +305,15 @@ class PlaybackService : MediaSessionService() {
                     val p = session?.player
                     if (p == null || !p.isPlaying) return@post
                     if (currentStation()?.tritonMount != mount) return@post
+
+                    // si el stream ya nos da el titulo, no lo pisamos: seguimos
+                    // preguntando por si dejara de mandarlo, pero sin tocar nada
+                    if (icyFiable) {
+                        val sigue = Runnable { consultarTriton(mount) }
+                        tritonPending = sigue
+                        handler.postDelayed(sigue, NowPlaying.POLL_POR_DEFECTO_MS)
+                        return@post
+                    }
 
                     setSong(
                         info.texto,
