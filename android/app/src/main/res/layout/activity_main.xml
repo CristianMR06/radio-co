@@ -167,6 +167,91 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
+        <!-- texto rapido: un boton que lo deja en el portapapeles -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:letterSpacing="0.12"
+            android:text="@string/text_label"
+            android:textAllCaps="true"
+            android:textColor="@color/dim2"
+            android:textSize="11sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:id="@+id/cardText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@drawable/card_bg"
+            android:clickable="true"
+            android:focusable="true"
+            android:orientation="vertical"
+            android:padding="18dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:layout_width="44dp"
+                    android:layout_height="44dp">
+
+                    <View
+                        android:id="@+id/textIconBg"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:background="@drawable/circle" />
+
+                    <ImageView
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:layout_gravity="center"
+                        android:contentDescription="@string/text_copy"
+                        android:src="@drawable/ic_copy"
+                        android:tint="@color/on_accent" />
+                </FrameLayout>
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="14dp"
+                    android:layout_weight="1"
+                    android:includeFontPadding="false"
+                    android:letterSpacing="-0.02"
+                    android:text="@string/text_copy"
+                    android:textColor="@color/txt"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tvTextPreview"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:ellipsize="end"
+                android:maxLines="3"
+                android:textColor="@color/dim"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/btnEditText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingTop="4dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="4dp"
+                android:text="@string/text_edit"
+                android:textColor="@color/dim2"
+                android:textSize="12sp" />
+        </LinearLayout>
+
         <!-- un poco mas de peso abajo: el bloque queda algo por encima del
              centro optico, que se lee mejor que justo en el medio -->
         <View

@@ -3,6 +3,15 @@
     <string name="data_today">Datos de hoy</string>
     <string name="reset">reiniciar</string>
     <string name="stations_label">Emisoras</string>
+    <string name="text_label">Texto</string>
+    <string name="text_copy">Copiar texto</string>
+    <string name="text_edit">editar</string>
+    <string name="text_edit_title">Texto que se copia</string>
+    <string name="text_edit_help">Esto es lo que se pondrá en el portapapeles al pulsar el botón.</string>
+    <string name="text_empty">Todavía no hay texto. Pulsa «editar» para ponerlo.</string>
+    <string name="text_copied">Texto copiado</string>
+    <string name="text_saved">Texto guardado</string>
+    <string name="save">Guardar</string>
     <string name="music_label">Mi música</string>
     <string name="videos_label">Mis vídeos</string>
     <string name="play_all">Reproducir todo</string>

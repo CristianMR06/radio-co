@@ -198,6 +198,20 @@ Detalles de implementación:
   se convierten en fichas de la lista **conservando el mismo id**, así que lo
   que ya estaba descargado en el móvil no hay que volver a bajarlo.
 
+### Botón de copiar texto
+
+Abajo del todo hay una tarjeta **Copiar texto**: al pulsarla deja un texto fijo
+en el portapapeles, listo para pegarlo donde haga falta.
+
+El texto se edita **desde la propia app** (enlace «editar»), así que cambiarlo
+no necesita una versión nueva. Se guarda en preferencias (`texto.rapido`) y
+sobrevive a las actualizaciones. `TEXTO_POR_DEFECTO` en `MainActivity` es solo
+lo que trae de fábrica, para una instalación limpia.
+
+Detalle: desde Android 13 el sistema enseña **su propio** aviso con lo copiado,
+así que la app solo muestra su mensaje en versiones anteriores; si no, saldrían
+dos avisos para lo mismo.
+
 ### Publicar el repositorio (una sola vez)
 
 ```powershell

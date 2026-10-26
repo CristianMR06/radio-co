@@ -4,6 +4,7 @@ import android.Manifest
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.content.ActivityNotFoundException
+import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Intent
@@ -45,6 +46,14 @@ import java.util.concurrent.Executors
 
 @UnstableApi
 class MainActivity : AppCompatActivity() {
+
+    companion object {
+        private const val CLAVE_TEXTO = "texto.rapido"
+        private const val ACCENT_TEXTO = 0xFF60A5FA.toInt()
+
+        /** Lo que trae de fabrica; se puede cambiar desde la app. */
+        private const val TEXTO_POR_DEFECTO = ""
+    }
 
     private lateinit var b: ActivityMainBinding
     private val rows = LinkedHashMap<String, ItemStationBinding>()
@@ -134,6 +143,10 @@ class MainActivity : AppCompatActivity() {
 
         b.tvVersion.text = getString(R.string.version_fmt, BuildConfig.VERSION_NAME)
         b.btnUpdate.setOnClickListener { onUpdateClick() }
+        b.cardText.setOnClickListener { copiarTexto() }
+        b.btnEditText.setOnClickListener { editarTexto() }
+        pintarTexto()
+
         Lyrics.limpiarAjustesViejos(this)
         Updater.cleanOldApks(this, BuildConfig.VERSION_CODE)
         paintUpdate()
@@ -921,6 +934,70 @@ class MainActivity : AppCompatActivity() {
 
     private fun paintData() {
         b.tvData.text = DataMeter.format(DataMeter.bytesToday(this)) + " MB"
+    }
+
+    // ---------------------------------------------------------- texto rapido
+
+    /**
+     * El texto que deja el boton en el portapapeles. Se puede cambiar desde la
+     * propia app (enlace "editar"), asi que no hace falta una version nueva
+     * cada vez: esto es solo lo que trae de fabrica.
+     */
+    private fun textoRapido(): String =
+        DataMeter.prefs(this).getString(CLAVE_TEXTO, null) ?: TEXTO_POR_DEFECTO
+
+    private fun pintarTexto() {
+        val t = textoRapido()
+        b.textIconBg.backgroundTintList = ColorStateList.valueOf(ACCENT_TEXTO)
+        b.tvTextPreview.text = t.ifBlank { getString(R.string.text_empty) }
+        b.tvTextPreview.setTextColor(
+            ContextCompat.getColor(this, if (t.isBlank()) R.color.dim2 else R.color.dim)
+        )
+    }
+
+    private fun copiarTexto() {
+        val t = textoRapido()
+        if (t.isBlank()) {
+            editarTexto()
+            return
+        }
+        try {
+            val cb = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+            cb.setPrimaryClip(ClipData.newPlainText(getString(R.string.text_label), t))
+            // desde Android 13 el sistema ya ensena su propio aviso de copiado:
+            // con el Toast saldrian dos
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) {
+                Toast.makeText(this, R.string.text_copied, Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, R.string.media_failed, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun editarTexto() {
+        val campo = EditText(this).apply {
+            setText(textoRapido())
+            inputType = InputType.TYPE_CLASS_TEXT or
+                InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+            maxLines = 8
+            setSelection(text.length)
+        }
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.text_edit_title)
+            .setMessage(R.string.text_edit_help)
+            .setView(campo)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.save) { _, _ ->
+                DataMeter.prefs(this).edit()
+                    .putString(CLAVE_TEXTO, campo.text.toString())
+                    .apply()
+                pintarTexto()
+                Toast.makeText(this, R.string.text_saved, Toast.LENGTH_SHORT).show()
+            }
+            .show()
     }
 
     // --------------------------------------------------------------- permisos
