@@ -42,7 +42,7 @@ class VideoActivity : AppCompatActivity() {
 
     private lateinit var b: ActivityVideoBinding
     private var player: ExoPlayer? = null
-    private var ranura: Ranura? = null
+    private var medio: Medio? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,13 +56,13 @@ class VideoActivity : AppCompatActivity() {
 
         b.btnBack.setOnClickListener { finish() }
 
-        ranura = Medios.porId(intent.getStringExtra(EXTRA_ID))
+        medio = Medios.porId(this, intent.getStringExtra(EXTRA_ID))
     }
 
     override fun onStart() {
         super.onStart()
-        val r = ranura
-        if (r == null || !Medios.guardado(this, r)) {
+        val r = medio
+        if (r == null || Medios.tamano(this, r) <= 0L) {
             b.tvError.visibility = View.VISIBLE
             b.tvError.setText(R.string.media_failed)
             // sin video no hay controles, asi que la flecha se queda fija:
@@ -131,7 +131,7 @@ class VideoActivity : AppCompatActivity() {
      */
     private fun guardarPosicion() {
         val p = player ?: return
-        val r = ranura ?: return
+        val r = medio ?: return
         val duracion = p.duration
         val posicion = p.currentPosition
         val guardar = when {
@@ -142,10 +142,10 @@ class VideoActivity : AppCompatActivity() {
         DataMeter.prefs(this).edit().putLong(clave(r), guardar).apply()
     }
 
-    private fun posicionGuardada(r: Ranura): Long =
+    private fun posicionGuardada(r: Medio): Long =
         DataMeter.prefs(this).getLong(clave(r), 0L)
 
-    private fun clave(r: Ranura) = "medio.${r.id}.posicion"
+    private fun clave(r: Medio) = "medio." + r.id + ".posicion"
 
     // ------------------------------------------------------------- pantalla
 

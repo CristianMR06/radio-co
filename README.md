@@ -141,36 +141,37 @@ buffer del reproductor y del CDN. Hay dos casos:
 
 Si la radio rebuferea, el karaoke se descuadra hasta la siguiente canción.
 
-### Mis medios (archivos propios del móvil)
+### Mi música y mis vídeos (archivos propios del móvil)
 
-Además de las emisoras, la app reproduce dos archivos tuyos: un audio y un
-vídeo. La idea es que si siempre pones los mismos, no tiene sentido que gasten
-datos cada vez.
+Además de las emisoras, la app reproduce archivos tuyos: **las canciones que
+quieras** y **los vídeos que quieras**, en dos listas separadas. La idea es que
+si siempre pones los mismos, no tiene sentido que gasten datos cada vez.
 
-**No se descargan de ningún sitio.** Los eliges con el selector del sistema y la
-app se queda con una copia en su carpeta:
+**Se guardan en el móvil.** Los eliges con el selector del sistema, o pegas un
+enlace y se bajan **una vez**. La copia vive en:
 
 ```
 Android/data/com.radioco.app/files/medios/
 ```
 
 A partir de ahí todo sale del disco: la reproducción **no toca la red ni una
-sola vez**. Se copia en vez de guardar solo una referencia para que da igual que
+sola vez**. Se copia en vez de guardar solo una referencia para que dé igual que
 luego muevas o borres el original; la copia sobrevive a las actualizaciones de
-la app y solo se va si desinstalas o pulsas «borrar copia».
+la app y solo se va si desinstalas o pulsas «borrar copia» (que pide
+confirmación, porque recuperarla cuesta datos).
 
-Detalles de implementación:
-
+- **Reproducir todo** pone la lista de música entera. Y al tocar una canción
+  suelta se carga igualmente la lista completa empezando por ella, así los
+  botones de siguiente y anterior (notificación, auriculares, pantalla de
+  bloqueo) funcionan desde cualquier punto.
+- **Varios enlaces de golpe**, separados por comas, puntos y coma o saltos de
+  línea. Se bajan de uno en uno —en paralelo cada uno iría más lento y el
+  progreso no diría nada— y la fila muestra «Descargando 2 de 5… 47%».
 - El audio va por el mismo `PlaybackService` que las emisoras, así que suena en
   segundo plano y con controles en la pantalla de bloqueo.
 - El vídeo tiene pantalla propia (`VideoActivity`), a pantalla completa y sin
   dejar que se apague. Al arrancar, la radio se para **sola**: no hay
   coordinación entre los dos reproductores, lo resuelve el foco de audio.
-- El `mediaId` de un medio es `media:<ranura>`, con prefijo para que
-  `Stations.parseStation()` devuelva `null` y ni Triton ni ICY se metan donde no
-  les toca.
-- La copia se escribe a un `.parcial` y solo se renombra al terminar, para que
-  un fallo a medias no deje un fichero roto con pinta de bueno.
 - La pantalla del vídeo **esconde los botones de "anterior" y "siguiente"**. Con
   un solo medio, "anterior" no va a otra pista: salta al segundo 0, que es justo
   lo contrario de lo que se busca al rebobinar. Quedan retroceder 10 s y avanzar
@@ -180,6 +181,22 @@ Detalles de implementación:
 - La franja de abajo está en `systemGestureExclusionRects`: sin eso, arrastrar
   la barra desde cerca del borde izquierdo lo entiende Android como el gesto de
   "atrás" y cierra la pantalla.
+
+Detalles de implementación:
+
+- El índice (qué hay, de qué tipo y con qué nombre) va en las preferencias, en
+  `medios.lista`; los archivos se llaman como su id y **no llevan extensión**:
+  el reproductor detecta el formato por el contenido.
+- El `mediaId` de un medio es `media:<id>`, con prefijo para que
+  `Stations.parseStation()` devuelva `null` y ni Triton ni ICY se metan donde no
+  les toca.
+- La copia se escribe a un `.parcial` y solo se renombra al terminar, para que
+  un fallo a medias no deje un fichero roto con pinta de bueno. Antes de darla
+  por buena se miran los primeros bytes: los enlaces de "compartir" de Drive y
+  compañía devuelven una página web, no el archivo.
+- Hasta la 2.2 solo había **dos huecos fijos**, `audio` y `video`. Al actualizar
+  se convierten en fichas de la lista **conservando el mismo id**, así que lo
+  que ya estaba descargado en el móvil no hay que volver a bajarlo.
 
 ### Publicar el repositorio (una sola vez)
 

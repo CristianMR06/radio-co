@@ -20,6 +20,7 @@ import android.text.format.DateFormat
 import android.text.format.Formatter
 import android.text.InputType
 import android.view.View
+import android.view.ViewGroup
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.widget.EditText
 import android.widget.Toast
@@ -48,16 +49,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var b: ActivityMainBinding
     private val rows = LinkedHashMap<String, ItemStationBinding>()
     private val mediaRows = LinkedHashMap<String, ItemMediaBinding>()
+    /** La fila de "anadir" de cada lista, que es tambien la del progreso. */
+    private val addRows = HashMap<TipoMedio, ItemMediaBinding>()
 
-    /** Copias en curso: id de la ranura -> porcentaje. */
-    private val copiando = HashMap<String, Int>()
-    /** Ranura -> texto del fallo, para poder explicar cual fue. */
+    private var canciones: List<Medio> = emptyList()
+    private var videos: List<Medio> = emptyList()
+
+    /** Copias en curso: solo una por lista. Tipo -> porcentaje. */
+    private val copiando = HashMap<TipoMedio, Int>()
+    /** Tipo -> texto del fallo, para poder explicar cual fue. */
     private val fallos = HashMap<String, String>()
-    private var ranuraPendiente: Ranura? = null
+    private var tipoPendiente: TipoMedio? = null
 
-    /** Descargas por URL en curso: id de ranura -> id de DownloadManager. */
-    private val descargas = HashMap<String, Long>()
-    private val urls = HashMap<String, String>()
+    /** Descargas por URL en curso: tipo -> id de DownloadManager. */
+    private val descargas = HashMap<TipoMedio, Long>()
+    private val urls = HashMap<TipoMedio, String>()
+    /** El id que tendra el medio cuando termine de bajarse. */
+    private val idEnCurso = HashMap<TipoMedio, String>()
+    /** Enlaces que quedan por bajar de la tanda, en orden. */
+    private val colaUrls = HashMap<TipoMedio, MutableList<String>>()
+    private val pedidas = HashMap<TipoMedio, Int>()
+    private val fallidas = HashMap<TipoMedio, Int>()
 
     /**
      * Selector del sistema. Se registra aqui (no en onCreate) porque tiene que
@@ -65,9 +77,9 @@ class MainActivity : AppCompatActivity() {
      */
     private val selector =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-            val r = ranuraPendiente
-            ranuraPendiente = null
-            if (uri != null && r != null) importar(r, uri)
+            val t = tipoPendiente
+            tipoPendiente = null
+            if (uri != null && t != null) importar(t, uri)
         }
 
     private var future: ListenableFuture<MediaController>? = null
@@ -112,7 +124,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(b.root)
 
         buildRows()
-        buildMediaRows()
+        recargarMedios()
 
         b.btnReset.setOnClickListener {
             DataMeter.reset(this)
@@ -462,114 +474,204 @@ class MainActivity : AppCompatActivity() {
 
     // --------------------------------------------------------------- medios
 
-    private fun buildMediaRows() {
-        for (r in Medios.ranuras) {
-            val row = ItemMediaBinding.inflate(layoutInflater, b.containerMedia, false)
-            row.iconBg.backgroundTintList = ColorStateList.valueOf(r.accent)
-            row.icon.imageTintList =
-                ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_accent))
-            row.rowRoot.setOnClickListener { pulsarMedio(r) }
-            row.btnDelete.setOnClickListener { borrarMedio(r) }
-            row.btnUrl.setOnClickListener { pedirUrl(r) }
-            b.containerMedia.addView(row.root)
-            mediaRows[r.id] = row
-        }
-        b.lblMedia.visibility = View.VISIBLE
-        b.containerMedia.visibility = View.VISIBLE
-    }
-
-    /** Esta sonando este medio ahora mismo? */
-    private fun sonando(r: Ranura): Boolean {
-        val c = controller ?: return false
-        return Medios.parseRanura(c.currentMediaItem?.mediaId)?.id == r.id &&
-            (c.isPlaying || c.playWhenReady)
+    /**
+     * Las listas se guardan en memoria: Medios.lista() mira el disco y esto se
+     * pinta en cada tick. Se recargan solo cuando cambia algo de verdad.
+     */
+    private fun recargarMedios() {
+        val todos = Medios.lista(this)
+        canciones = todos.filter { it.tipo == TipoMedio.AUDIO }
+        videos = todos.filter { it.tipo == TipoMedio.VIDEO }
+        reconstruirMedios()
     }
 
     /**
-     * Un solo boton para los dos casos: si el hueco esta vacio abre el selector
-     * del movil, y si ya hay archivo lo reproduce (o lo para). Nunca hay red
-     * por medio.
+     * Rehace las dos listas. Solo al anadir o borrar: si se hiciera en cada
+     * pintado, el ecualizador se reiniciaria una vez por segundo.
      */
-    private fun pulsarMedio(r: Ranura) {
-        if (copiando.containsKey(r.id)) return          // se esta copiando
+    private fun reconstruirMedios() {
+        for ((id, row) in mediaRows) eqParar(id, listOf(row.bar1, row.bar2, row.bar3))
+        mediaRows.clear()
+        addRows.clear()
+        b.containerMusic.removeAllViews()
+        b.containerVideos.removeAllViews()
 
-        if (!Medios.guardado(this, r)) {
-            ranuraPendiente = r
-            try {
-                selector.launch(r.mimes)
-            } catch (e: Exception) {
-                ranuraPendiente = null
-                fallos[r.id] = getString(R.string.media_failed)
-                renderMedios()
-            }
-            return
+        llenar(b.containerMusic, canciones, TipoMedio.AUDIO)
+        llenar(b.containerVideos, videos, TipoMedio.VIDEO)
+
+        b.btnPlayAll.visibility = if (canciones.isEmpty()) View.GONE else View.VISIBLE
+        b.btnPlayAll.setOnClickListener { reproducirTodo() }
+        renderMedios()
+    }
+
+    private fun llenar(contenedor: ViewGroup, medios: List<Medio>, tipo: TipoMedio) {
+        for (m in medios) {
+            val row = ItemMediaBinding.inflate(layoutInflater, contenedor, false)
+            pintarIcono(row, Medios.accent(tipo))
+            row.rowRoot.setOnClickListener { pulsarMedio(m) }
+            row.btnDelete.setOnClickListener { borrarMedio(m) }
+            // en el XML nace oculto, que es como lo quiere la fila de "anadir"
+            row.btnDelete.visibility = View.VISIBLE
+            row.btnUrl.visibility = View.GONE
+            contenedor.addView(row.root)
+            mediaRows[m.id] = row
         }
 
-        when (r.tipo) {
+        // la fila de "anadir" va al final de cada lista, y es tambien donde se
+        // ve el progreso de la copia o de la descarga
+        val add = ItemMediaBinding.inflate(layoutInflater, contenedor, false)
+        pintarIcono(add, Medios.accent(tipo))
+        add.icon.setImageResource(R.drawable.ic_download)
+        add.tvName.setText(
+            if (tipo == TipoMedio.AUDIO) R.string.media_add_song else R.string.media_add_video
+        )
+        add.tvSub.visibility = View.GONE
+        add.eq.visibility = View.GONE
+        add.btnDelete.visibility = View.GONE
+        add.rowRoot.setOnClickListener { elegirDelMovil(tipo) }
+        add.btnUrl.setOnClickListener { pedirUrl(tipo) }
+        contenedor.addView(add.root)
+        addRows[tipo] = add
+    }
+
+    private fun pintarIcono(row: ItemMediaBinding, accent: Int) {
+        row.iconBg.backgroundTintList = ColorStateList.valueOf(accent)
+        row.icon.imageTintList =
+            ColorStateList.valueOf(ContextCompat.getColor(this, R.color.on_accent))
+    }
+
+    /** Esta sonando este medio ahora mismo? */
+    private fun sonando(m: Medio): Boolean {
+        val c = controller ?: return false
+        return Medios.idDeMediaId(c.currentMediaItem?.mediaId) == m.id &&
+            (c.isPlaying || c.playWhenReady)
+    }
+
+    private fun sonandoMiMusica(): Boolean {
+        val c = controller ?: return false
+        val id = Medios.idDeMediaId(c.currentMediaItem?.mediaId) ?: return false
+        return canciones.any { it.id == id } && (c.isPlaying || c.playWhenReady)
+    }
+
+    /**
+     * Una cancion no se pone sola: se pone la lista entera empezando por ella,
+     * asi los botones de siguiente y anterior (notificacion, auriculares,
+     * pantalla de bloqueo) funcionan desde cualquier punto.
+     */
+    private fun pulsarMedio(m: Medio) {
+        when (m.tipo) {
             TipoMedio.VIDEO ->
                 startActivity(
                     Intent(this, VideoActivity::class.java)
-                        .putExtra(VideoActivity.EXTRA_ID, r.id)
+                        .putExtra(VideoActivity.EXTRA_ID, m.id)
                 )
 
             TipoMedio.AUDIO -> {
                 val c = controller ?: return
-                if (sonando(r)) {
+                if (sonando(m)) {
                     c.stop()
                     c.clearMediaItems()
                 } else {
-                    c.setMediaItem(Medios.mediaItem(this, r))
-                    c.prepare()
-                    c.play()
+                    ponerCola(canciones.indexOfFirst { it.id == m.id }.coerceAtLeast(0))
                 }
             }
         }
         render()
     }
 
-    private fun importar(r: Ranura, uri: android.net.Uri) {
-        copiando[r.id] = 0
-        fallos.remove(r.id)
+    private fun reproducirTodo() {
+        val c = controller ?: return
+        if (sonandoMiMusica()) {
+            c.stop()
+            c.clearMediaItems()
+        } else {
+            ponerCola(0)
+        }
+        render()
+    }
+
+    private fun ponerCola(desde: Int) {
+        val c = controller ?: return
+        if (canciones.isEmpty()) return
+        c.setMediaItems(canciones.map { Medios.mediaItem(this, it) }, desde, 0L)
+        c.prepare()
+        c.play()
+    }
+
+    // ----------------------------------------------------------- anadir mas
+
+    private fun elegirDelMovil(tipo: TipoMedio) {
+        if (ocupado(tipo)) return
+        tipoPendiente = tipo
+        try {
+            selector.launch(Medios.mimes(tipo))
+        } catch (e: Exception) {
+            tipoPendiente = null
+            fallos[tipo.id] = getString(R.string.media_failed)
+            renderMedios()
+        }
+    }
+
+    private fun ocupado(tipo: TipoMedio) =
+        copiando.containsKey(tipo) ||
+            descargas.containsKey(tipo) ||
+            colaUrls[tipo]?.isNotEmpty() == true
+
+    private fun importar(tipo: TipoMedio, uri: android.net.Uri) {
+        val id = Medios.nuevoId(this, tipo)
+        copiando[tipo] = 0
+        fallos.remove(tipo.id)
         renderMedios()
 
         try {
             io.execute {
-                val ok = Medios.importar(this, r, uri) { copiados, total ->
+                val m = Medios.importar(this, tipo, id, uri) { copiados, total ->
                     val pct = if (total > 0) ((copiados * 100) / total).toInt() else 0
                     handler.post {
-                        if (copiando.containsKey(r.id)) {
-                            copiando[r.id] = pct
+                        if (copiando.containsKey(tipo)) {
+                            copiando[tipo] = pct
                             renderMedios()
                         }
                     }
                 }
                 handler.post {
                     if (isFinishing || isDestroyed) return@post
-                    copiando.remove(r.id)
-                    if (!ok) fallos[r.id] = getString(R.string.media_failed)
-                    renderMedios()
+                    copiando.remove(tipo)
+                    if (m == null) fallos[tipo.id] = getString(R.string.media_failed)
+                    recargarMedios()
                 }
             }
         } catch (e: Exception) {
-            copiando.remove(r.id)
-            fallos[r.id] = getString(R.string.media_failed)
+            copiando.remove(tipo)
+            fallos[tipo.id] = getString(R.string.media_failed)
             renderMedios()
         }
     }
 
-    private fun borrarMedio(r: Ranura) {
-        if (sonando(r)) {
-            controller?.stop()
-            controller?.clearMediaItems()
-        }
-        Medios.borrar(this, r)
-        Toast.makeText(this, R.string.media_deleted, Toast.LENGTH_SHORT).show()
-        renderMedios()
+    /**
+     * Con confirmacion: borrar una copia significa volver a gastar datos para
+     * recuperarla, que es justo lo que esta app intenta evitar.
+     */
+    private fun borrarMedio(m: Medio) {
+        AlertDialog.Builder(this)
+            .setTitle(m.nombre)
+            .setMessage(R.string.media_delete_confirm)
+            .setNegativeButton(R.string.cancel, null)
+            .setPositiveButton(R.string.media_delete_ok) { _, _ ->
+                if (sonando(m)) {
+                    controller?.stop()
+                    controller?.clearMediaItems()
+                }
+                Medios.borrar(this, m)
+                Toast.makeText(this, R.string.media_deleted, Toast.LENGTH_SHORT).show()
+                recargarMedios()
+            }
+            .show()
     }
 
     /** Pide un enlace y se lo baja. El enlace lo pone el usuario, no la app. */
-    private fun pedirUrl(r: Ranura) {
-        if (copiando.containsKey(r.id) || descargas.containsKey(r.id)) return
+    private fun pedirUrl(tipo: TipoMedio) {
+        if (ocupado(tipo)) return
 
         val campo = EditText(this).apply {
             hint = getString(R.string.media_url_hint)
@@ -580,10 +682,7 @@ class MainActivity : AppCompatActivity() {
 
         // Si acabas de copiar un enlace, ya te lo pone: teclear una URL larga
         // en el movil es justo lo que nadie quiere hacer.
-        portapapeles()?.let {
-            campo.setText(it)
-            campo.setSelection(it.length)
-        }
+        portapapeles()?.let { campo.setText(it) }
 
         AlertDialog.Builder(this)
             .setTitle(R.string.media_url_title)
@@ -591,23 +690,77 @@ class MainActivity : AppCompatActivity() {
             .setView(campo)
             .setNegativeButton(R.string.cancel, null)
             .setPositiveButton(R.string.ok) { _, _ ->
-                val url = campo.text.toString().trim()
+                // se pueden pegar varios de golpe: separados por comas, por
+                // punto y coma o por saltos de linea. Una URL nunca lleva
+                // espacios, asi que cortar tambien por ahi no rompe nada.
+                val lista = campo.text.toString()
+                    .split(Regex("[,;\\s]+"))
+                    .map { it.trim() }
+                    .filter { it.isNotBlank() }
+
                 // solo https: Android bloquea el trafico sin cifrar desde
                 // targetSdk 28, asi que un http:// fallaria sin explicacion
-                if (!url.startsWith("https://")) {
+                val buenos = lista.filter { it.startsWith("https://") }
+                if (buenos.isEmpty()) {
                     Toast.makeText(this, R.string.media_url_bad, Toast.LENGTH_LONG).show()
                     return@setPositiveButton
                 }
-                try {
-                    descargas[r.id] = Medios.descargar(this, r, url)
-                    urls[r.id] = url
-                    fallos.remove(r.id)
-                } catch (e: Exception) {
-                    fallos[r.id] = getString(R.string.media_failed)
+                if (buenos.size < lista.size) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.media_url_some_bad, lista.size - buenos.size),
+                        Toast.LENGTH_LONG
+                    ).show()
                 }
-                renderMedios()
+
+                colaUrls[tipo] = buenos.toMutableList()
+                pedidas[tipo] = buenos.size
+                fallidas[tipo] = 0
+                fallos.remove(tipo.id)
+                arrancarDescarga(tipo)
             }
             .show()
+    }
+
+    /**
+     * Baja los enlaces de uno en uno. En serie a proposito: si se lanzaran
+     * todos a la vez, cada uno iria mas lento y el progreso no diria nada.
+     */
+    private fun arrancarDescarga(tipo: TipoMedio) {
+        val cola = colaUrls[tipo]
+        if (cola == null || cola.isEmpty()) {
+            terminarTanda(tipo)
+            return
+        }
+        val url = cola.removeAt(0)
+        val id = Medios.nuevoId(this, tipo)
+        try {
+            descargas[tipo] = Medios.descargar(this, tipo, id, url)
+            idEnCurso[tipo] = id
+            urls[tipo] = url
+        } catch (e: Exception) {
+            fallidas[tipo] = (fallidas[tipo] ?: 0) + 1
+            arrancarDescarga(tipo)
+            return
+        }
+        renderMedios()
+    }
+
+    private fun terminarTanda(tipo: TipoMedio) {
+        val total = pedidas[tipo] ?: 0
+        val mal = fallidas[tipo] ?: 0
+        colaUrls.remove(tipo)
+        pedidas.remove(tipo)
+        fallidas.remove(tipo)
+        if (total > 1) {
+            fallos.remove(tipo.id)
+            Toast.makeText(
+                this,
+                getString(R.string.media_batch_done, total - mal, total),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+        recargarMedios()
     }
 
     /** El enlace copiado, si lo hay y tiene pinta de servir. */
@@ -623,88 +776,103 @@ class MainActivity : AppCompatActivity() {
 
     private fun pollMedios() {
         if (descargas.isEmpty()) return
-        val terminadas = mutableListOf<String>()
+        val terminadas = mutableListOf<TipoMedio>()
 
-        for ((id, dlId) in descargas) {
-            val r = Medios.porId(id) ?: continue
-            val row = mediaRows[id] ?: continue
+        for ((tipo, dlId) in descargas) {
+            val id = idEnCurso[tipo] ?: continue
+            val row = addRows[tipo] ?: continue
             val p = Medios.progreso(this, dlId)
             when {
                 p == null || p.fallo -> {
                     Medios.cancelar(this, dlId)
-                    fallos[id] = getString(R.string.media_failed)
-                    terminadas += id
+                    fallos[tipo.id] = getString(R.string.media_failed)
+                    terminadas += tipo
                 }
 
                 p.listo -> {
-                    when (Medios.finalizarDescarga(this, r, urls[id].orEmpty())) {
-                        Medios.Fallo.NINGUNO -> fallos.remove(id)
+                    when (Medios.finalizarDescarga(this, tipo, id, urls[tipo].orEmpty())) {
+                        Medios.Fallo.NINGUNO -> fallos.remove(tipo.id)
                         Medios.Fallo.ES_UNA_PAGINA ->
-                            fallos[id] = getString(R.string.media_failed_html)
+                            fallos[tipo.id] = getString(R.string.media_failed_html)
 
                         Medios.Fallo.VACIO ->
-                            fallos[id] = getString(R.string.media_failed_empty)
+                            fallos[tipo.id] = getString(R.string.media_failed_empty)
 
                         Medios.Fallo.NO_SE_PUDO_GUARDAR ->
-                            fallos[id] = getString(R.string.media_failed)
+                            fallos[tipo.id] = getString(R.string.media_failed)
                     }
-                    terminadas += id
+                    terminadas += tipo
                 }
 
                 else -> row.pb.progress = p.porcentaje
             }
         }
 
-        terminadas.forEach { descargas.remove(it); urls.remove(it) }
-        renderMedios()
+        for (tipo in terminadas) {
+            descargas.remove(tipo)
+            urls.remove(tipo)
+            idEnCurso.remove(tipo)
+            if (fallos.containsKey(tipo.id)) fallidas[tipo] = (fallidas[tipo] ?: 0) + 1
+            // sigue con el siguiente enlace de la tanda; si no queda ninguno,
+            // arrancarDescarga() la da por terminada
+            arrancarDescarga(tipo)
+        }
+        if (terminadas.isEmpty()) renderMedios()
     }
 
     private fun renderMedios() {
-        for (r in Medios.ranuras) {
-            val row = mediaRows[r.id] ?: continue
-            val bajando = descargas.containsKey(r.id)
-            val pct = copiando[r.id] ?: if (bajando) row.pb.progress else null
-            val guardado = Medios.guardado(this, r)
-            val suena = sonando(r)
+        for (m in canciones + videos) {
+            val row = mediaRows[m.id] ?: continue
+            val suena = sonando(m)
+            val accent = Medios.accent(m.tipo)
 
-            row.tvName.text = Medios.nombre(this, r) ?: r.etiqueta
-            row.rowRoot.background = fondoTarjeta(suena, r.accent)
-            row.icon.setImageResource(
-                when {
-                    !guardado -> R.drawable.ic_download
-                    suena -> R.drawable.ic_stop
-                    else -> R.drawable.ic_play
-                }
-            )
+            row.tvName.text = m.nombre
+            row.rowRoot.background = fondoTarjeta(suena, accent)
+            row.icon.setImageResource(if (suena) R.drawable.ic_stop else R.drawable.ic_play)
 
             val barras = listOf(row.bar1, row.bar2, row.bar3)
             row.eq.visibility = if (suena) View.VISIBLE else View.GONE
-            if (suena) eqArrancar(r.id, r.accent, barras) else eqParar(r.id, barras)
+            if (suena) eqArrancar(m.id, accent, barras) else eqParar(m.id, barras)
 
-            val ocupada = pct != null
-            row.pb.visibility = if (ocupada) View.VISIBLE else View.GONE
-            if (copiando[r.id] != null) row.pb.progress = pct!!
-            row.btnDelete.visibility = if (guardado && !ocupada) View.VISIBLE else View.GONE
-            row.btnUrl.visibility = if (!guardado && !ocupada) View.VISIBLE else View.GONE
-
-            row.tvSub.text = if (guardado) {
-                r.etiqueta + " · " + Formatter.formatShortFileSize(this, Medios.tamano(this, r))
-            } else {
-                r.etiqueta
-            }
-
-            row.tvEstado.text = when {
-                bajando && pct != null -> getString(R.string.media_downloading, pct)
-                pct != null -> getString(R.string.media_copying, pct)
-                fallos.containsKey(r.id) -> fallos[r.id].orEmpty()
-                suena -> getString(R.string.media_playing)
-                guardado -> getString(R.string.media_saved)
-                else -> getString(R.string.media_pick)
-            }
+            row.tvSub.text = Formatter.formatShortFileSize(this, Medios.tamano(this, m))
+            row.tvEstado.text =
+                if (suena) getString(R.string.media_playing) else getString(R.string.media_saved)
             row.tvEstado.setTextColor(
-                ContextCompat.getColor(this, if (guardado) R.color.dim else R.color.txt)
+                ContextCompat.getColor(this, if (suena) R.color.txt else R.color.dim)
             )
         }
+
+        for (tipo in TipoMedio.entries) {
+            val add = addRows[tipo] ?: continue
+            val bajando = descargas.containsKey(tipo)
+            val pct = copiando[tipo] ?: if (bajando) add.pb.progress else null
+            val ocupada = pct != null
+
+            add.pb.visibility = if (ocupada) View.VISIBLE else View.GONE
+            if (copiando[tipo] != null) add.pb.progress = pct!!
+            add.btnUrl.visibility = if (ocupada) View.GONE else View.VISIBLE
+
+            val total = pedidas[tipo] ?: 0
+            add.tvEstado.text = when {
+                bajando && pct != null && total > 1 ->
+                    getString(
+                        R.string.media_downloading_n,
+                        total - (colaUrls[tipo]?.size ?: 0), total, pct
+                    )
+
+                bajando && pct != null -> getString(R.string.media_downloading, pct)
+                pct != null -> getString(R.string.media_copying, pct)
+                fallos.containsKey(tipo.id) -> fallos[tipo.id].orEmpty()
+                else -> getString(R.string.media_add_hint)
+            }
+            add.tvEstado.setTextColor(
+                ContextCompat.getColor(
+                    this, if (fallos.containsKey(tipo.id)) R.color.err else R.color.txt
+                )
+            )
+        }
+
+        b.btnPlayAll.setText(if (sonandoMiMusica()) R.string.stop_all else R.string.play_all)
     }
 
     /** Sin borde cuando esta apagada; con el acento marcado cuando suena. */

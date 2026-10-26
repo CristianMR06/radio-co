@@ -106,27 +106,66 @@
             android:layout_height="wrap_content"
             android:orientation="vertical" />
 
-        <!-- medios propios: la etiqueta y la lista se ocultan si no hay ninguno -->
+        <!-- mi musica: la cabecera lleva el boton de reproducirlo todo -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:letterSpacing="0.12"
+                android:text="@string/music_label"
+                android:textAllCaps="true"
+                android:textColor="@color/dim2"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnPlayAll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:background="@drawable/pill_bg"
+                android:paddingStart="14dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="14dp"
+                android:paddingBottom="8dp"
+                android:text="@string/play_all"
+                android:textColor="@color/txt"
+                android:textSize="12sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/containerMusic"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <!-- mis videos -->
         <TextView
-            android:id="@+id/lblMedia"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
             android:layout_marginBottom="12dp"
             android:letterSpacing="0.12"
-            android:text="@string/media_label"
+            android:text="@string/videos_label"
             android:textAllCaps="true"
             android:textColor="@color/dim2"
             android:textSize="11sp"
-            android:textStyle="bold"
-            android:visibility="gone" />
+            android:textStyle="bold" />
 
         <LinearLayout
-            android:id="@+id/containerMedia"
+            android:id="@+id/containerVideos"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:visibility="gone" />
+            android:orientation="vertical" />
 
         <!-- un poco mas de peso abajo: el bloque queda algo por encima del
              centro optico, que se lee mejor que justo en el medio -->
