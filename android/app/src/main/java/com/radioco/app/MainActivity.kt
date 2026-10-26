@@ -51,8 +51,13 @@ class MainActivity : AppCompatActivity() {
         private const val CLAVE_TEXTO = "texto.rapido"
         private const val ACCENT_TEXTO = 0xFF60A5FA.toInt()
 
-        /** Lo que trae de fabrica; se puede cambiar desde la app. */
-        private const val TEXTO_POR_DEFECTO = ""
+        /**
+         * Lo que trae de fabrica; se puede cambiar desde la app. Son los
+         * enlaces de las canciones, en el formato que admite "pegar un
+         * enlace": separados por comas y en https (Android bloquea http).
+         */
+        private const val TEXTO_POR_DEFECTO =
+            "https://ammedia.es/CM/maria-teresa.mp3,https://ammedia.es/CM/hala-madrid.mp3,https://ammedia.es/CM/yo-no-fui.mp3,https://ammedia.es/CM/un-beso.mp3,https://ammedia.es/CM/bam-bam.mp3"
     }
 
     private lateinit var b: ActivityMainBinding
@@ -944,7 +949,9 @@ class MainActivity : AppCompatActivity() {
      * cada vez: esto es solo lo que trae de fabrica.
      */
     private fun textoRapido(): String =
-        DataMeter.prefs(this).getString(CLAVE_TEXTO, null) ?: TEXTO_POR_DEFECTO
+        DataMeter.prefs(this).getString(CLAVE_TEXTO, null)
+            ?.takeIf { it.isNotBlank() }
+            ?: TEXTO_POR_DEFECTO
 
     private fun pintarTexto() {
         val t = textoRapido()
